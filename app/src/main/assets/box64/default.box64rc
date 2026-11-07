@@ -97,6 +97,14 @@ BOX64_SSE42=0
 [*dotnetfx*]
 BOX64_EXIT=1
 
+[Anoore.exe]
+# Ano Ko wa Ore kara Hanarenai (Giga, kDays.dll + Themida 2010): the protector
+# unpacks into its .data sections and mixes code and data there. DIRTY=1 runs
+# stale code, DIRTY=0 alone stalls, so interpret only that range.
+BOX64_DYNAREC=1
+BOX64_DYNAREC_DIRTY=0
+BOX64_NODYNAREC=0x79c000-0xef7000
+
 [*ndp452-kb*]
 BOX64_EXIT=1
 

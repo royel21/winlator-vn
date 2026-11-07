@@ -15,6 +15,7 @@ import com.winlator.xserver.errors.BadGraphicsContext;
 import com.winlator.xserver.errors.BadImplementation;
 import com.winlator.xserver.errors.BadSHMSegment;
 import com.winlator.xserver.errors.XRequestError;
+import com.winlator.xserver.requests.DrawRequests;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -111,6 +112,8 @@ public class MITSHMExtension extends Extension {
             }
         }
         else drawable.drawImage(srcX, srcY, dstX, dstY, srcWidth, srcHeight, depth, data, totalWidth, totalHeight);
+
+        DrawRequests.markIncludeInferiors(client, drawable, graphicsContext, dstX, dstY, srcWidth, srcHeight);
     }
 
     private void createPixmap(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
@@ -143,7 +146,7 @@ public class MITSHMExtension extends Extension {
                 }
                 break;
             case ClientOpcodes.PUT_IMAGE :
-                try (XLock lock = xServer.lock(XServer.Lockable.SHMSEGMENT_MANAGER, XServer.Lockable.DRAWABLE_MANAGER, XServer.Lockable.GRAPHIC_CONTEXT_MANAGER)) {
+                try (XLock lock = xServer.lock(XServer.Lockable.WINDOW_MANAGER, XServer.Lockable.SHMSEGMENT_MANAGER, XServer.Lockable.DRAWABLE_MANAGER, XServer.Lockable.GRAPHIC_CONTEXT_MANAGER)) {
                     putImage(client, inputStream, outputStream);
                 }
                 break;

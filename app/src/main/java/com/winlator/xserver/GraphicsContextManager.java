@@ -56,12 +56,20 @@ public class GraphicsContextManager extends XResourceManager {
                 case GraphicsContext.FLAG_ARC_MODE:
                 case GraphicsContext.FLAG_TILE:
                 case GraphicsContext.FLAG_STIPPLE:
-                case GraphicsContext.FLAG_FONT:
                 case GraphicsContext.FLAG_CLIP_MASK:
+                    // None (0) removes the clip; pixmap clip masks aren't supported, treat them as no clipping
+                    inputStream.readInt();
+                    graphicsContext.setClipRectangles(null);
+                    break;
+                case GraphicsContext.FLAG_CLIP_X_ORIGIN:
+                    graphicsContext.setClipXOrigin((short)inputStream.readInt());
+                    break;
+                case GraphicsContext.FLAG_CLIP_Y_ORIGIN:
+                    graphicsContext.setClipYOrigin((short)inputStream.readInt());
+                    break;
+                case GraphicsContext.FLAG_FONT:
                 case GraphicsContext.FLAG_TILE_STIPPLE_X_ORIGIN:
                 case GraphicsContext.FLAG_TILE_STIPPLE_Y_ORIGIN:
-                case GraphicsContext.FLAG_CLIP_X_ORIGIN:
-                case GraphicsContext.FLAG_CLIP_Y_ORIGIN:
                 case GraphicsContext.FLAG_DASH_OFFSET:
                     inputStream.skip(4);
                     break;

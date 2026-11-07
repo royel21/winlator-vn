@@ -39,6 +39,9 @@ public class DrawableManager extends XResourceManager implements XResourceManage
             xServer.getRenderer().xServerView.queueEvent(texture::destroy);
         }
 
+        final Texture ownTexture = drawable.releaseOwnTexture();
+        if (ownTexture != null) xServer.getRenderer().xServerView.queueEvent(ownTexture::destroy);
+
         Callback<Drawable> onDestroyListener = drawable.getOnDestroyListener();
         if (onDestroyListener != null) onDestroyListener.call(drawable);
 
@@ -53,8 +56,10 @@ public class DrawableManager extends XResourceManager implements XResourceManage
 
     public void onContextLost() {
         for (int i = 0; i < drawables.size(); i++) {
-            Texture texture = drawables.valueAt(i).getTexture();
+            Drawable drawable = drawables.valueAt(i);
+            Texture texture = drawable.getTexture();
             if (texture != null) texture.onContextLost();
+            drawable.onOwnTextureContextLost();
         }
     }
 

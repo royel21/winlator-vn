@@ -33,6 +33,9 @@ public class GraphicsContext extends XResource {
     private int lineWidth = 1;
     private int planeMask = -1;
     private SubwindowMode subwindowMode = SubwindowMode.CLIP_BY_CHILDREN;
+    private short clipXOrigin = 0;
+    private short clipYOrigin = 0;
+    private short[] clipRectangles = null; // x, y, width, height per rectangle, relative to the clip origin; null means no clipping
 
     public GraphicsContext(int id, Drawable drawable) {
         super(id);
@@ -85,5 +88,29 @@ public class GraphicsContext extends XResource {
 
     public void setSubwindowMode(SubwindowMode subwindowMode) {
         this.subwindowMode = subwindowMode;
+    }
+
+    public short getClipXOrigin() {
+        return clipXOrigin;
+    }
+
+    public void setClipXOrigin(short clipXOrigin) {
+        this.clipXOrigin = clipXOrigin;
+    }
+
+    public short getClipYOrigin() {
+        return clipYOrigin;
+    }
+
+    public void setClipYOrigin(short clipYOrigin) {
+        this.clipYOrigin = clipYOrigin;
+    }
+
+    public short[] getClipRectangles() {
+        return clipRectangles;
+    }
+
+    public void setClipRectangles(short[] clipRectangles) {
+        this.clipRectangles = clipRectangles;
     }
 }

@@ -37,6 +37,24 @@ public abstract class GraphicsContextRequests {
         if (!valueMask.isEmpty()) client.xServer.graphicsContextManager.updateGraphicsContext(graphicsContext, valueMask, inputStream);
     }
 
+    public static void setClipRectangles(XClient client, XInputStream inputStream, XOutputStream outputStream) throws XRequestError {
+        int gcId = inputStream.readInt();
+        short clipXOrigin = inputStream.readShort();
+        short clipYOrigin = inputStream.readShort();
+        int count = client.getRemainingRequestLength() / 8;
+
+        short[] rectangles = new short[count * 4];
+        for (int i = 0; i < rectangles.length; i++) rectangles[i] = inputStream.readShort();
+        client.skipRequest();
+
+        GraphicsContext graphicsContext = client.xServer.graphicsContextManager.getGraphicsContext(gcId);
+        if (graphicsContext == null) throw new BadGraphicsContext(gcId);
+
+        graphicsContext.setClipXOrigin(clipXOrigin);
+        graphicsContext.setClipYOrigin(clipYOrigin);
+        graphicsContext.setClipRectangles(rectangles);
+    }
+
     public static void freeGC(XClient client, XInputStream inputStream, XOutputStream outputStream) throws XRequestError {
         client.xServer.graphicsContextManager.freeGraphicsContext(inputStream.readInt());
     }

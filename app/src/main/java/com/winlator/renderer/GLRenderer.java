@@ -245,8 +245,52 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
             windowMaterial.setUniformFloat(windowMaterial.uniforms.noAlpha, !transparent ? 1.0f : 0.0f);
             windowMaterial.setUniformFloatArray(windowMaterial.uniforms.xform, tmpXForm1);
             windowMaterial.setUniformBool(windowMaterial.uniforms.flipY, texture.isFlipY());
+            windowMaterial.setUniformVec4(windowMaterial.uniforms.uvRect, 0.0f, 0.0f, 1.0f, 1.0f);
 
             GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, quadVertices.count());
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+        }
+    }
+
+    /* Shows what was drawn into a window with an IncludeInferiors GC (Wine's window DCs) above its
+     * child windows, while it keeps being redrawn: e.g. a GDI video child window over the game's
+     * GL/Vulkan client window. When the drawing stops the children show again. */
+    private static final long INFERIOR_OVERLAY_MAX_AGE = 300;
+
+    private void renderInferiorOverlay(Drawable drawable, int x, int y, FullscreenTransformation fullscreenTransformation) {
+        short[] rects = drawable.getInferiorOverlays(INFERIOR_OVERLAY_MAX_AGE);
+        if (rects == null || !drawable.hasOwnData()) return;
+
+        synchronized (drawable.renderLock) {
+            Texture texture = drawable.getTexture();
+            boolean ownMainTexture = texture != null && !(texture instanceof GPUImage) && texture.getOwner() == drawable;
+            if (!ownMainTexture) texture = drawable.getOwnTexture();
+            texture.updateFromDrawable();
+            if (!texture.isAllocated()) return;
+
+            float baseX = x, baseY = y, scaleX = 1.0f, scaleY = 1.0f;
+            if (fullscreenTransformation != null) {
+                baseX = fullscreenTransformation.x;
+                baseY = fullscreenTransformation.y;
+                scaleX = (float)fullscreenTransformation.width / drawable.width;
+                scaleY = (float)fullscreenTransformation.height / drawable.height;
+            }
+
+            GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture.getTextureId());
+            windowMaterial.setUniformInt(windowMaterial.uniforms.texture, 0);
+            windowMaterial.setUniformFloat(windowMaterial.uniforms.noAlpha, 1.0f);
+            windowMaterial.setUniformBool(windowMaterial.uniforms.flipY, false);
+            for (int i = 0; i + 3 < rects.length; i += 4) {
+                float rectX = rects[i], rectY = rects[i+1], rectWidth = rects[i+2], rectHeight = rects[i+3];
+                XForm.set(tmpXForm1, baseX + rectX * scaleX, baseY + rectY * scaleY, rectWidth * scaleX, rectHeight * scaleY);
+                XForm.multiply(tmpXForm1, tmpXForm1, tmpXForm2);
+                windowMaterial.setUniformFloatArray(windowMaterial.uniforms.xform, tmpXForm1);
+                windowMaterial.setUniformVec4(windowMaterial.uniforms.uvRect, rectX / drawable.width, rectY / drawable.height,
+                    rectWidth / drawable.width, rectHeight / drawable.height);
+                GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, quadVertices.count());
+            }
+            windowMaterial.setUniformVec4(windowMaterial.uniforms.uvRect, 0.0f, 0.0f, 1.0f, 1.0f);
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
         }
     }
@@ -258,6 +302,10 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
 
         try (XLock lock = xServer.lock(XServer.Lockable.DRAWABLE_MANAGER)) {
             for (RenderableWindow window : renderableWindows) {
+                if (window.inferiorOverlay) {
+                    renderInferiorOverlay(window.content, window.rootX, window.rootY, window.fullscreenTransformation);
+                    continue;
+                }
                 if (!window.content.isOffscreenStorage() && !window.content.isAwaitingFirstPresent()) {
                     renderWindowDrawable(window.content, window.rootX, window.rootY, window.transparent, window.fullscreenTransformation);
                 }
@@ -343,8 +391,15 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         if (!window.attributes.isRenderSubwindows()) syncCompositeRedirectTexture(window);
 
         if (window.attributes.isRenderSubwindows()) {
+            boolean hasViewableChild = false;
             for (Window child : window.getChildren()) {
+                if (child.attributes.isViewable()) hasViewableChild = true;
                 collectRenderableWindows(child, child.getX() + x, child.getY() + y);
+            }
+
+            if (hasViewableChild && window != xServer.windowManager.rootWindow && window.attributes.isViewable()) {
+                FullscreenTransformation fullscreenTransformation = forceWindowsFullscreen ? window.getFullscreenTransformation() : null;
+                renderableWindows.add(new RenderableWindow(window.getContent(), x, y, false, fullscreenTransformation, true));
             }
         }
     }

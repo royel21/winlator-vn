@@ -61,6 +61,7 @@ public abstract class DrawRequests {
             case Z_PIXMAP:
                 if (leftPad == 0) {
                     drawable.drawImage((short)0, (short)0, dstX, dstY, width, height, depth, data, width, height);
+                    markIncludeInferiors(client, drawable, graphicsContext, dstX, dstY, width, height);
                 }
                 else throw new BadMatch();
                 break;
@@ -112,6 +113,42 @@ public abstract class DrawRequests {
         drawable.fillRect(x, y, width, height, 0x000000);
 
         if (exposures) window.sendEvent(new Expose(window));
+    }
+
+    /**
+     * Drawing with an IncludeInferiors GC paints over the window's child windows on an X server.
+     * Wine draws every window DC this way, e.g. a GDI-drawn video child window over the game's
+     * GL client window, so remember the drawn (clipped) area to show it above the children.
+     */
+    public static void markIncludeInferiors(XClient client, Drawable drawable, GraphicsContext graphicsContext, int x, int y, int width, int height) {
+        if (graphicsContext.getSubwindowMode() != GraphicsContext.SubwindowMode.INCLUDE_INFERIORS) return;
+        Window window = client.xServer.windowManager.getWindow(drawable.id);
+        if (window == null || window.getContent() != drawable) return;
+
+        boolean hasMappedChild = false;
+        for (Window child : window.getChildren()) {
+            if (child.attributes.isMapped()) {
+                hasMappedChild = true;
+                break;
+            }
+        }
+        if (!hasMappedChild) return;
+
+        short[] clip = graphicsContext.getClipRectangles();
+        if (clip == null) {
+            drawable.addInferiorOverlay(x, y, width, height);
+            return;
+        }
+
+        int originX = graphicsContext.getClipXOrigin();
+        int originY = graphicsContext.getClipYOrigin();
+        for (int i = 0; i + 3 < clip.length; i += 4) {
+            int left = Math.max(x, originX + clip[i]);
+            int top = Math.max(y, originY + clip[i+1]);
+            int right = Math.min(x + width, originX + clip[i] + (clip[i+2] & 0xffff));
+            int bottom = Math.min(y + height, originY + clip[i+1] + (clip[i+3] & 0xffff));
+            if (right > left && bottom > top) drawable.addInferiorOverlay(left, top, right - left, bottom - top);
+        }
     }
 
     public static void copyArea(XClient client, XInputStream inputStream, XOutputStream outputStream) throws XRequestError {

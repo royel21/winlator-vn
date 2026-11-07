@@ -23,6 +23,12 @@ public class Drawable extends XResource {
     private boolean offscreenStorage = false;
     private boolean awaitingFirstPresent = false;
     private Callback<Drawable> onDestroyListener;
+    private Texture ownTexture;
+    /* Areas drawn into this window with an IncludeInferiors GC, as {x, y, width, height, time}.
+     * An X server paints those over the child windows (e.g. a GDI-drawn video child window
+     * over the application's GL/Vulkan client window), the renderer shows them above the children. */
+    private final java.util.ArrayList<long[]> inferiorOverlays = new java.util.ArrayList<>();
+    private static final int MAX_INFERIOR_OVERLAYS = 64;
     public final Object renderLock = new Object();
 
     static {
@@ -66,6 +72,58 @@ public class Drawable extends XResource {
     public void setTexture(Texture texture) {
         if (texture instanceof GPUImage) data = ((GPUImage)texture).getVirtualData();
         this.texture = texture;
+    }
+
+    /** True when the pixel data is this drawable's own buffer rather than the mapped memory of its GPU texture. */
+    public boolean hasOwnData() {
+        return data != null && !(texture instanceof GPUImage && data == ((GPUImage)texture).getVirtualData());
+    }
+
+    /** Texture with this drawable's own pixel data, used for the IncludeInferiors overlay. */
+    public Texture getOwnTexture() {
+        if (ownTexture == null) ownTexture = new Texture(this);
+        return ownTexture;
+    }
+
+    public void addInferiorOverlay(int x, int y, int width, int height) {
+        if (width <= 0 || height <= 0) return;
+        long now = android.os.SystemClock.uptimeMillis();
+        synchronized (inferiorOverlays) {
+            for (long[] overlay : inferiorOverlays) {
+                if (overlay[0] == x && overlay[1] == y && overlay[2] == width && overlay[3] == height) {
+                    overlay[4] = now;
+                    return;
+                }
+            }
+            if (inferiorOverlays.size() >= MAX_INFERIOR_OVERLAYS) inferiorOverlays.remove(0);
+            inferiorOverlays.add(new long[]{x, y, width, height, now});
+        }
+    }
+
+    /** Returns the overlay rectangles (x, y, width, height) drawn within maxAge ms, dropping older ones. */
+    public short[] getInferiorOverlays(long maxAge) {
+        synchronized (inferiorOverlays) {
+            if (inferiorOverlays.isEmpty()) return null;
+            long now = android.os.SystemClock.uptimeMillis();
+            inferiorOverlays.removeIf(overlay -> now - overlay[4] > maxAge);
+            if (inferiorOverlays.isEmpty()) return null;
+            short[] result = new short[inferiorOverlays.size() * 4];
+            for (int i = 0; i < inferiorOverlays.size(); i++) {
+                long[] overlay = inferiorOverlays.get(i);
+                for (int j = 0; j < 4; j++) result[i*4+j] = (short)overlay[j];
+            }
+            return result;
+        }
+    }
+
+    public void onOwnTextureContextLost() {
+        if (ownTexture != null) ownTexture.onContextLost();
+    }
+
+    public Texture releaseOwnTexture() {
+        Texture texture = ownTexture;
+        ownTexture = null;
+        return texture;
     }
 
     @Nullable
@@ -248,6 +306,7 @@ public class Drawable extends XResource {
 
     public void forceUpdate() {
         awaitingFirstPresent = false;
+        if (ownTexture != null) ownTexture.setNeedsUpdate(true);
         if (!offscreenStorage || useSharedData) {
             texture.setNeedsUpdate(true);
             if (onDrawListener != null) onDrawListener.run();
