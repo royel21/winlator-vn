@@ -322,8 +322,17 @@ public class ContainerDetailFragment extends Fragment {
                                         }
                                         else data = new JSONObject(json);
 
-                                        Container dummyContainer = new Container(0);
+                                        ContainerManager.removeUniqueVariables(data);
+
+                                        String currentName = etName.getText().toString().trim();
+                                        String currentWineVersion = container != null ? container.getWineVersion() : (sWineVersion.getSelectedItem() != null ? ((WineInfo)sWineVersion.getSelectedItem()).identifier() : WineInfo.MAIN_WINE_VERSION.identifier());
+
+                                        Container dummyContainer = new Container(container != null ? container.id : 0, !currentName.isEmpty() ? currentName : "Container-0");
+                                        dummyContainer.setWineVersion(currentWineVersion);
                                         dummyContainer.loadData(data);
+                                        dummyContainer.setName(!currentName.isEmpty() ? currentName : "Container-0");
+                                        dummyContainer.setWineVersion(currentWineVersion);
+
                                         loadUIFromContainer(dummyContainer, fragmentView);
                                         AppUtils.showToast(getContext(), "Imported settings to UI. Press confirm to save.");
                                     }
@@ -413,7 +422,7 @@ public class ContainerDetailFragment extends Fragment {
         cpuListView.setCheckedCPUList(container != null ? container.getCPUList(true) : Container.getFallbackCPUList());
         cpuListViewWoW64.setCheckedCPUList(container != null ? container.getCPUListWoW64(true) : Container.getFallbackCPUListWoW64());
 
-        createWineConfigurationTab(view);
+        createWineConfigurationTab(view, container);
 
         final String[] mouseWarpOverrideValues = new String[]{"disable", "enable", "force"};
         Spinner sMouseWarpOverride = view.findViewById(R.id.SMouseWarpOverride);
@@ -434,7 +443,7 @@ public class ContainerDetailFragment extends Fragment {
         createWinComponentsTab(view, container != null ? container.getWinComponents() : Container.DEFAULT_WINCOMPONENTS);
 
         ((LinearLayout)view.findViewById(R.id.LLDrives)).removeAllViews();
-        createDrivesTab(view);
+        createDrivesTab(view, container);
 
         sbLogPixelsView.setValue(container != null ? container.getLogPixels() : 96);
 
@@ -524,10 +533,10 @@ public class ContainerDetailFragment extends Fragment {
         }
     }
 
-    private void createWineConfigurationTab(View view) {
+    private void createWineConfigurationTab(View view, Container container) {
         Context context = getContext();
 
-        WineThemeManager.ThemeInfo desktopTheme = new WineThemeManager.ThemeInfo(isEditMode() ? container.getDesktopTheme() : WineThemeManager.DEFAULT_DESKTOP_THEME);
+        WineThemeManager.ThemeInfo desktopTheme = new WineThemeManager.ThemeInfo(container != null ? container.getDesktopTheme() : WineThemeManager.DEFAULT_DESKTOP_THEME);
         RadioGroup rgDesktopTheme = view.findViewById(R.id.RGDesktopTheme);
         rgDesktopTheme.check(desktopTheme.theme == WineThemeManager.Theme.LIGHT ? R.id.RBLight : R.id.RBDark);
         final ImagePickerView ipvDesktopBackgroundImage = view.findViewById(R.id.IPVDesktopBackgroundImage);
@@ -556,21 +565,21 @@ public class ContainerDetailFragment extends Fragment {
         });
         sDesktopBackgroundType.setSelection(desktopTheme.backgroundType.ordinal());
 
-        File containerDir = isEditMode() ? container.getRootDir() : null;
+        File containerDir = container != null ? container.getRootDir() : null;
         File userRegFile = new File(containerDir, ".wine/user.reg");
 
         try (WineRegistryEditor registryEditor = new WineRegistryEditor(userRegFile)) {
             MSLogFont msLogFont = (new MSLogFont()).fromByteArray(registryEditor.getHexValues("Control Panel\\Desktop\\WindowMetrics", "CaptionFont"));
             AppUtils.setSpinnerSelectionFromValue(sSystemFont, msLogFont.getFaceName());
 
-            int logPixels = isEditMode() ? container.getLogPixels() : 96;
+            int logPixels = container != null ? container.getLogPixels() : 96;
             sbLogPixelsView.setValue(registryEditor.getDwordValue("Control Panel\\Desktop", "LogPixels", logPixels));
 
             List<String> mouseWarpOverrideList = Arrays.asList(context.getString(R.string.disable), context.getString(R.string.enable), context.getString(R.string.force));
             Spinner sMouseWarpOverride = view.findViewById(R.id.SMouseWarpOverride);
             sMouseWarpOverride.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, mouseWarpOverrideList));
 
-            String mouseWarpOverride = isEditMode() ? container.getMouseWarpOverride() : "disable";
+            String mouseWarpOverride = container != null ? container.getMouseWarpOverride() : "disable";
             AppUtils.setSpinnerSelectionFromValue(sMouseWarpOverride, registryEditor.getStringValue("Software\\Wine\\DirectInput", "MouseWarpOverride", mouseWarpOverride));
         }
     }
@@ -701,13 +710,13 @@ public class ContainerDetailFragment extends Fragment {
         return drives;
     }
 
-    private void createDrivesTab(View view) {
+    private void createDrivesTab(View view, Container container) {
         final Context context = getContext();
 
         final LinearLayout parent = view.findViewById(R.id.LLDrives);
         final View emptyTextView = view.findViewById(R.id.TVDrivesEmptyText);
         LayoutInflater inflater = LayoutInflater.from(context);
-        final String drives = isEditMode() ? container.getDrives() : Container.DEFAULT_DRIVES;
+        final String drives = container != null ? container.getDrives() : Container.DEFAULT_DRIVES;
         final String[] driveLetters = new String[Container.MAX_DRIVE_LETTERS];
         for (int i = 0; i < driveLetters.length; i++) driveLetters[i] = ((char)(i + 68))+":";
 

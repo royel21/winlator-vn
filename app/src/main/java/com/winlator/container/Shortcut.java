@@ -160,6 +160,7 @@ public class Shortcut {
             if (!extra.has("startAsFullscreen")) extra.put("startAsFullscreen", getExtra("startAsFullscreen", String.valueOf(container.isStartAsFullscreen())));
             if (!extra.has("useEGL")) extra.put("useEGL", getExtra("useEGL", container.getExtra("useEGL", "y")));
             if (!extra.has("mouseWarpOverride")) extra.put("mouseWarpOverride", getExtra("mouseWarpOverride", container.getMouseWarpOverride()));
+            if (!extra.has("winVersion")) extra.put("winVersion", getExtra("winVersion", container.getWinVersion()));
 
             data.put("extraData", extra);
             return data;

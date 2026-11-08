@@ -86,6 +86,7 @@ public class ContainerManager {
             Container container = new Container(id);
             container.setRootDir(containerDir);
             container.loadData(data);
+            for (String key : APPLIED_STATE_EXTRAS) container.putExtra(key, null);
 
             // wineVersion 已经在 loadData 中正确设置，不需要额外处理
 
@@ -194,15 +195,47 @@ public class ContainerManager {
         });
     }
 
+    /* Extra data recording what was already applied to a container's wineprefix (win components,
+     * DX wrapper, drivers, ...). A new container gets a fresh prefix from the pattern, so it must not
+     * inherit them, otherwise e.g. native Direct3D is never extracted until the setting is toggled. */
+    private static final String[] APPLIED_STATE_EXTRAS = {
+        "wincomponents", "dxwrapper", "graphicsDriver", "audioDriver", "desktopTheme", "startupSelection", "openAndroidBrowserFromWine"
+    };
+
+    public static void removeUniqueVariables(JSONObject containerData) {
+        if (containerData == null) return;
+        containerData.remove("id");
+        containerData.remove("name");
+        containerData.remove("wineVersion");
+
+        JSONObject extraData = containerData.optJSONObject("extraData");
+        if (extraData != null) {
+            extraData.remove("id");
+            extraData.remove("containerId");
+            extraData.remove("name");
+            extraData.remove("wineVersion");
+            extraData.remove("path");
+            extraData.remove("appVersion");
+            extraData.remove("rfsVersion");
+            extraData.remove("userRegLastModified");
+            extraData.remove("wineprefixNeedsUpdate");
+            extraData.remove("needPatchUpdate");
+            for (String key : APPLIED_STATE_EXTRAS) extraData.remove(key);
+        }
+    }
+
     private void exportConfig(Container container, File file) {
         try {
             JSONObject containerData = container.getData();
-            JSONArray shortcutsArray = new JSONArray();
-            for (Shortcut shortcut : getShortcuts(container)) {
-                shortcutsArray.put(shortcut.getData());
+            if (containerData != null) {
+                removeUniqueVariables(containerData);
+                JSONArray shortcutsArray = new JSONArray();
+                for (Shortcut shortcut : getShortcuts(container)) {
+                    shortcutsArray.put(shortcut.getData());
+                }
+                containerData.put("shortcuts", shortcutsArray);
+                FileUtils.writeString(file, containerData.toString(4));
             }
-            containerData.put("shortcuts", shortcutsArray);
-            FileUtils.writeString(file, containerData.toString(4));
         }
         catch (JSONException e) {}
     }
@@ -228,20 +261,34 @@ public class ContainerManager {
             }
             else containerData = new JSONObject(jsonContent);
 
-            if(containerData.has("wineVersion")){
-                String wineVersion = containerData.getString("wineVersion");
-                if (wineVersion.equals(container.getWineVersion())) {
-                    containerData.put("extraData", null);
-                    container.loadData(containerData);
-                    WineUtils.setWinVersion(container, container.getWinVersion());
-                    container.saveData();
+            removeUniqueVariables(containerData);
 
-                    JSONArray shortcutsArray = containerData.optJSONArray("shortcuts");
-                    if (shortcutsArray != null) {
-                        for (int i = 0; i < shortcutsArray.length(); i++) {
-                            createShortcut(container, shortcutsArray.getJSONObject(i), null);
-                        }
-                    }
+            // Keep this container's own bookkeeping (app/rootfs versions, applied state, ...) and
+            // lay the imported settings over it, then forget what was applied so the imported
+            // components, drivers and wrappers get applied on the next start.
+            JSONObject importedExtra = containerData.optJSONObject("extraData");
+            if (importedExtra != null) {
+                JSONObject currentData = container.getData();
+                JSONObject mergedExtra = currentData != null && currentData.optJSONObject("extraData") != null ?
+                    currentData.optJSONObject("extraData") : new JSONObject();
+                Iterator<String> keys = importedExtra.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
+                    mergedExtra.put(key, importedExtra.get(key));
+                }
+                for (String key : APPLIED_STATE_EXTRAS) mergedExtra.remove(key);
+                containerData.put("extraData", mergedExtra);
+            }
+
+            container.loadData(containerData);
+            for (String key : APPLIED_STATE_EXTRAS) container.putExtra(key, null);
+            WineUtils.setWinVersion(container, container.getWinVersion());
+            container.saveData();
+
+            JSONArray shortcutsArray = containerData.optJSONArray("shortcuts");
+            if (shortcutsArray != null) {
+                for (int i = 0; i < shortcutsArray.length(); i++) {
+                    createShortcut(container, shortcutsArray.getJSONObject(i), null);
                 }
             }
         }
@@ -273,7 +320,10 @@ public class ContainerManager {
             if (jsonContent.isEmpty()) return;
 
             JSONArray containersArray;
-            if (jsonContent.trim().startsWith("{")) {
+            if (jsonContent.trim().startsWith("[")) {
+                containersArray = new JSONArray(jsonContent);
+            }
+            else if (jsonContent.trim().startsWith("{")) {
                 containersArray = new JSONArray();
                 containersArray.put(new JSONObject(jsonContent));
             }
@@ -283,7 +333,9 @@ public class ContainerManager {
 
             for (int i = 0; i < containersArray.length(); i++) {
                 try {
-                    createContainer(containersArray.getJSONObject(i));
+                    JSONObject containerData = containersArray.getJSONObject(i);
+                    containerData.remove("id");
+                    createContainer(containerData);
                 }
                 catch (JSONException e) {}
             }
@@ -304,12 +356,15 @@ public class ContainerManager {
             JSONArray containersArray = new JSONArray();
             for (Container container : containers) {
                 JSONObject containerData = container.getData();
-                JSONArray shortcutsArray = new JSONArray();
-                for (Shortcut shortcut : getShortcuts(container)) {
-                    shortcutsArray.put(shortcut.getData());
+                if (containerData != null) {
+                    removeUniqueVariables(containerData);
+                    JSONArray shortcutsArray = new JSONArray();
+                    for (Shortcut shortcut : getShortcuts(container)) {
+                        shortcutsArray.put(shortcut.getData());
+                    }
+                    containerData.put("shortcuts", shortcutsArray);
+                    containersArray.put(containerData);
                 }
-                containerData.put("shortcuts", shortcutsArray);
-                containersArray.put(containerData);
             }
             FileUtils.writeString(file, containersArray.toString(4));
         }
