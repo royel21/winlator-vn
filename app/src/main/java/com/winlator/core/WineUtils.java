@@ -53,15 +53,6 @@ public abstract class WineUtils {
     }
 
     public static void setSystemFont(WineRegistryEditor userRegistry, String faceName) {
-        //byte[] fontNormalData = (new MSLogFont()).setFaceName(faceName).toByteArray();
-        //byte[] fontBoldData = (new MSLogFont()).setFaceName(faceName).setWeight(700).toByteArray();
-        //userRegistry.setHexValues("Control Panel\\Desktop\\WindowMetrics", "CaptionFont", fontBoldData);
-        //userRegistry.setHexValues("Control Panel\\Desktop\\WindowMetrics", "IconFont", fontNormalData);
-        //userRegistry.setHexValues("Control Panel\\Desktop\\WindowMetrics", "MenuFont", fontNormalData);
-        //userRegistry.setHexValues("Control Panel\\Desktop\\WindowMetrics", "MessageFont", fontNormalData);
-        //userRegistry.setHexValues("Control Panel\\Desktop\\WindowMetrics", "SmCaptionFont", fontNormalData);
-        //userRegistry.setHexValues("Control Panel\\Desktop\\WindowMetrics", "StatusFont", fontNormalData);
-        //中文显示会有问题，暂时改为注销这些字体配置
         userRegistry.removeValue("Control Panel\\Desktop\\WindowMetrics", "CaptionFont");
         userRegistry.removeValue("Control Panel\\Desktop\\WindowMetrics", "IconFont");
         userRegistry.removeValue("Control Panel\\Desktop\\WindowMetrics", "MenuFont");
@@ -147,6 +138,8 @@ public abstract class WineUtils {
                 else registryEditor.setStringValue(dllOverridesKey, name, "builtin,native");
             }
 
+            String Colors = "feff010000000000ffffff0030303000ffffff000288d10000000000d0d6da000288d10075757500212121000288d1000288d100c7d3d900ffffff0061616100a3a3a300";
+
             registryEditor.removeKey("Software\\Winlator\\WFM\\ContextMenu\\7-Zip");
             registryEditor.setStringValue("Software\\Winlator\\WFM\\ContextMenu\\7-Zip", "Open Archive", "Z:\\opt\\apps\\7-Zip\\7zFM.exe \"%FILE%\"");
             registryEditor.setStringValue("Software\\Winlator\\WFM\\ContextMenu\\7-Zip", "Extract Here", "Z:\\opt\\apps\\7-Zip\\7zG.exe x \"%FILE%\" -r -o\"%DIR%\" -y");
@@ -155,7 +148,7 @@ public abstract class WineUtils {
             registryEditor.setStringValue("Software\\Wine\\Drivers", "Graphics", "x11");
             registryEditor.setStringValue("Software\\Wine\\X11 Driver", "UseEGL", "y");
             registryEditor.setStringValue("Software\\Akelsoft\\AkelPad\\Options", "LanguageModule", "English.dll");
-            registryEditor.setStringValue("Software\\Akelsoft\\AkelPad\\Options", "LanguageModule", "English.dll");
+            registryEditor.setHexValue("Software\\Akelsoft\\AkelPad\\Options", "Colors", Colors);
             registryEditor.setStringValue("Software\\7-Zip", "Lang", "-");
         }
     }
