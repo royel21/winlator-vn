@@ -244,6 +244,12 @@ public class GuestProgramLauncherComponent extends EnvironmentComponent {
 
         if (this.envVars != null) envVars.putAll(this.envVars);
 
+        // WINE_FRAME_LIMIT caps the frame rate in WineD3D; apply it to DXVK as well
+        if (envVars.has("WINE_FRAME_LIMIT") && !envVars.has("DXVK_FRAME_RATE")) {
+            String frameLimit = envVars.get("WINE_FRAME_LIMIT");
+            if (frameLimit.matches("[1-9][0-9]*")) envVars.put("DXVK_FRAME_RATE", frameLimit);
+        }
+
         File shmDir = new File(rootDir, "tmp/shm");
         if (!shmDir.isDirectory()) shmDir.mkdirs();
 

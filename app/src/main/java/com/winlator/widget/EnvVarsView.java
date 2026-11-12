@@ -29,6 +29,7 @@ public class EnvVarsView extends FrameLayout {
     public static final String[][] knownEnvVars = {
         {"LC_ALL", "SELECT", "zh_CN.utf8", "zh_TW.utf8", "en_US.utf8", "ja_JP.utf8", "sr_RS.utf8", "ru_RU.utf8"},
         {"TZ", "SELECT", "Asia/Shanghai", "Asia/Tokyo", "Europe/Berlin", "America/New_York"},
+        {"WINE_FRAME_LIMIT", "SELECT", "0", "15", "20", "24", "25", "30", "40", "50", "60"},
         {"MESA_GL_VERSION_OVERRIDE", "SELECT", "4.6COMPAT", "3.3COMPAT", "4.5", "4.6", "3.3", "3.2", "2.1", "auto"},
         {"ZINK_DESCRIPTORS", "SELECT", "auto", "lazy", "cached", "notemplates"},
         {"ZINK_DEBUG", "SELECT_MULTIPLE", "nir", "spirv", "tgsi", "validation", "sync", "compact", "noreorder"},
