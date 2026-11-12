@@ -224,6 +224,25 @@ public abstract class WineUtils {
                 }
             }
         }
+        else if (identifier.equals("directshow")) {
+            // Native quartz.dll creates its video renderer through this class, which only
+            // regsvr32 registers; Wine's builtin registration covers the other classes.
+            final String key64 = "Software\\Classes\\CLSID\\{7D8AA343-6E63-4663-BE90-6B80F66540A3}";
+            final String key32 = "Software\\Classes\\Wow6432Node\\CLSID\\{7D8AA343-6E63-4663-BE90-6B80F66540A3}";
+
+            try (WineRegistryEditor registryEditor = new WineRegistryEditor(systemRegFile)) {
+                if (useNative) {
+                    registryEditor.setStringValue(key32+"\\InprocServer32", null, "C:\\windows\\system32\\quartz.dll");
+                    registryEditor.setStringValue(key32+"\\InprocServer32", "ThreadingModel", "Both");
+                    registryEditor.setStringValue(key64+"\\InprocServer32", null, "C:\\windows\\system32\\quartz.dll");
+                    registryEditor.setStringValue(key64+"\\InprocServer32", "ThreadingModel", "Both");
+                }
+                else {
+                    registryEditor.removeKey(key32, true);
+                    registryEditor.removeKey(key64, true);
+                }
+            }
+        }
     }
 
     public static void updateWineprefix(Context context, final Callback<Integer> terminationCallback) {
