@@ -1,14 +1,18 @@
 package com.winlator.winhandler;
 
+import android.net.Uri;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 
 import com.winlator.XServerDisplayActivity;
+import com.winlator.container.Container;
+import com.winlator.container.Drive;
 import com.winlator.core.Callback;
 import com.winlator.core.DefaultVersion;
 import com.winlator.core.FileUtils;
 import com.winlator.core.GeneralComponents;
 import com.winlator.core.StringUtils;
+import com.winlator.xenvironment.RootFS;
 import com.winlator.xserver.XServer;
 
 import java.io.IOException;
@@ -21,6 +25,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayDeque;
+import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -100,6 +105,38 @@ public class WinHandler {
             else sendData.putInt(0);
             sendPacket(clientPort);
         });
+    }
+
+    /**
+     * Wine passes local files as unix file URLs; get their Windows path back. Returns null
+     * when the file isn't reachable through a drive of the container.
+     */
+    private String fileUrlToDOSPath(String url) {
+        String path = Uri.decode(url.substring("file://".length()));
+        if (!path.startsWith("/")) return null;
+
+        int index = path.indexOf("/dosdevices/");
+        if (index != -1 && path.length() >= index + 14 && path.charAt(index + 13) == ':') {
+            String letter = path.substring(index + 12, index + 13).toUpperCase(Locale.ENGLISH);
+            return letter + ":" + path.substring(index + 14).replace("/", "\\");
+        }
+
+        Container container = activity.getContainer();
+        if (container != null) {
+            for (Drive drive : container.drivesIterator()) {
+                String drivePath = StringUtils.removeEndSlash(drive.path);
+                if (path.equals(drivePath) || path.startsWith(drivePath + "/")) {
+                    return drive.letter.toUpperCase(Locale.ENGLISH) + ":" + path.substring(drivePath.length()).replace("/", "\\");
+                }
+            }
+
+            index = path.indexOf("/.wine/drive_c/");
+            if (index != -1) return "C:" + path.substring(index + 14).replace("/", "\\");
+        }
+
+        String rootPath = StringUtils.removeEndSlash(RootFS.find(activity).getRootDir().getPath());
+        if (path.startsWith(rootPath + "/")) return "Z:" + path.substring(rootPath.length()).replace("/", "\\");
+        return null;
     }
 
     public void exec(String command) {
@@ -373,7 +410,14 @@ public class WinHandler {
                 int requestLength = receiveData.getInt();
                 byte[] data = new byte[requestLength];
                 socket.receive(new DatagramPacket(data, data.length));
-                FileUtils.openIntent(activity, new String(data));
+                String url = new String(data, StandardCharsets.UTF_8);
+                String dosPath = url.startsWith("file://") ? fileUrlToDOSPath(url) : null;
+                if (dosPath != null) {
+                    /* Android browsers can't read files inside the container or on its drives;
+                     * open local files with the browser in Wine. */
+                    exec("C:\\windows\\system32\\iexplore.exe", "\"" + dosPath + "\"");
+                }
+                else FileUtils.openIntent(activity, url);
                 break;
             }
             case RequestCodes.MIDI_OPEN: {
