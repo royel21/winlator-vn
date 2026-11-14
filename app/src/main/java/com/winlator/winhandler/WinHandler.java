@@ -92,9 +92,15 @@ public class WinHandler {
 
     public void exec(final String filename, final String parameters) {
         addAction(() -> {
+            byte[] filenameBytes = filename.getBytes();
+            int parametersLength = parameters != null ? parameters.getBytes().length : 0;
+            if (1 + 4 + filenameBytes.length + 4 + parametersLength > sendData.capacity()) {
+                /* too long for one request; putting it would throw and stop the send thread */
+                return;
+            }
+
             sendData.rewind();
             sendData.put(RequestCodes.EXEC);
-            byte[] filenameBytes = filename.getBytes();
             sendData.putInt(filenameBytes.length);
             sendData.put(filenameBytes);
             if (parameters != null) {
@@ -415,21 +421,19 @@ public class WinHandler {
                 int requestLength = receiveData.getInt();
                 byte[] data = new byte[requestLength];
                 socket.receive(new DatagramPacket(data, data.length));
-                String url = new String(data, StandardCharsets.UTF_8);
-                String dosPath = url.startsWith("file://") ? fileUrlToDOSPath(url) : null;
-                if (dosPath != null) {
-                    /* Android browsers can't read files inside the container or on its drives;
-                     * open local files with the browser in Wine. */
-                    exec("C:\\windows\\system32\\iexplore.exe", "\"" + dosPath + "\"");
+                String url = new String(data, StandardCharsets.UTF_8).trim();
+                try {
+                    String dosPath = url.startsWith("file://") ? fileUrlToDOSPath(url) : null;
+                    if (dosPath != null) {
+                        /* Android browsers can't read files inside the container or on its drives;
+                         * open local files with the browser in Wine. */
+                        exec("C:\\windows\\system32\\iexplore.exe", "\"" + dosPath + "\"");
+                    }
+                    else FileUtils.openIntent(activity, url);
                 }
-                else {
-                    try {
-                        FileUtils.openIntent(activity, url);
-                    }
-                    catch (RuntimeException e) {
-                        /* e.g. a file the FileProvider can't share; don't stop the handler thread */
-                        e.printStackTrace();
-                    }
+                catch (RuntimeException e) {
+                    /* e.g. a file the FileProvider can't share; don't stop the handler thread */
+                    e.printStackTrace();
                 }
                 break;
             }
