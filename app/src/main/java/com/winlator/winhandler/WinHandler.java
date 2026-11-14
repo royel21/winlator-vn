@@ -115,6 +115,11 @@ public class WinHandler {
         String path = Uri.decode(url.substring("file://".length()));
         if (!path.startsWith("/")) return null;
 
+        /* winebrowser sends the Windows path as file:///X:/dir/name */
+        if (path.length() >= 4 && Character.isLetter(path.charAt(1)) && path.charAt(2) == ':' && path.charAt(3) == '/') {
+            return path.substring(1, 2).toUpperCase(Locale.ENGLISH) + ":" + path.substring(3).replace("/", "\\");
+        }
+
         int index = path.indexOf("/dosdevices/");
         if (index != -1 && path.length() >= index + 14 && path.charAt(index + 13) == ':') {
             String letter = path.substring(index + 12, index + 13).toUpperCase(Locale.ENGLISH);
@@ -417,7 +422,15 @@ public class WinHandler {
                      * open local files with the browser in Wine. */
                     exec("C:\\windows\\system32\\iexplore.exe", "\"" + dosPath + "\"");
                 }
-                else FileUtils.openIntent(activity, url);
+                else {
+                    try {
+                        FileUtils.openIntent(activity, url);
+                    }
+                    catch (RuntimeException e) {
+                        /* e.g. a file the FileProvider can't share; don't stop the handler thread */
+                        e.printStackTrace();
+                    }
+                }
                 break;
             }
             case RequestCodes.MIDI_OPEN: {
