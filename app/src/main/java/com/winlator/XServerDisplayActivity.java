@@ -611,6 +611,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             containerDataChanged = true;
         }
 
+        setupDirectMusicSoundFont();
+
         File userRegFile = new File(rootFS.getRootDir(), RootFS.WINEPREFIX + "/user.reg");
         if (userRegFile.exists()) {
             try (WineRegistryEditor registryEditor = new WineRegistryEditor(userRegFile)) {
@@ -626,6 +628,51 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         if (containerDataChanged) container.saveData();
+    }
+
+    /**
+     * Wine's builtin DirectMusic loads its General MIDI instruments from the GMFilePath registry
+     * value. Put the soundfont selected in the settings inside the rootfs, where Wine can open it
+     * (Z:), and point GMFilePath at it. A GMFilePath set by the user to another file is kept.
+     */
+    private void setupDirectMusicSoundFont() {
+        final String soundfontDosPath = "Z:\\usr\\share\\soundfonts\\winlator.sf2";
+        String soundfont = preferences.getString("soundfont", DefaultVersion.SOUNDFONT);
+        File soundfontDir = new File(rootFS.getRootDir(), "usr/share/soundfonts");
+        File destination = new File(soundfontDir, "winlator.sf2");
+        File nameFile = new File(soundfontDir, "winlator.sf2.name");
+
+        byte[] installedName = nameFile.isFile() ? FileUtils.read(nameFile) : null;
+        if (!destination.isFile() || installedName == null || !soundfont.equals(new String(installedName).trim())) {
+            File tmpFile = new File(soundfontDir, "winlator.sf2.tmp");
+            if (!soundfontDir.isDirectory()) soundfontDir.mkdirs();
+            tmpFile.delete();
+
+            if (GeneralComponents.isBuiltinComponent(GeneralComponents.Type.SOUNDFONT, soundfont)) {
+                FileUtils.copy(this, "soundfont/" + soundfont + ".sf2", tmpFile);
+            }
+            else {
+                File source = new File(GeneralComponents.getComponentDir(GeneralComponents.Type.SOUNDFONT, this), soundfont + ".sf2");
+                FileUtils.copy(source, tmpFile);
+            }
+
+            if (!tmpFile.isFile() || tmpFile.length() == 0 || !tmpFile.renameTo(destination)) {
+                tmpFile.delete();
+                return;
+            }
+            FileUtils.writeString(nameFile, soundfont);
+        }
+
+        File systemRegFile = new File(rootFS.getRootDir(), RootFS.WINEPREFIX + "/system.reg");
+        if (!systemRegFile.exists()) return;
+        try (WineRegistryEditor registryEditor = new WineRegistryEditor(systemRegFile)) {
+            for (String key : new String[]{"Software\\Microsoft\\DirectMusic", "Software\\Wow6432Node\\Microsoft\\DirectMusic"}) {
+                String current = registryEditor.getStringValue(key, "GMFilePath", "");
+                if (current.isEmpty() || current.equalsIgnoreCase(soundfontDosPath) || current.toLowerCase().endsWith("\\drivers\\gm.dls")) {
+                    registryEditor.setStringValue(key, "GMFilePath", soundfontDosPath);
+                }
+            }
+        }
     }
 
     private void setupXEnvironment() {
