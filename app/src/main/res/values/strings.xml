@@ -28,6 +28,9 @@
     <string name="unable_to_install_system_files">Unable to install system files</string>
     <string name="keyboard">Keyboard</string>
     <string name="toggle_fullscreen">Toggle Fullscreen</string>
+    <string name="resolution">Resolution</string>
+    <string name="resolution_default">Default (%s)</string>
+    <string name="resolution_failed">Could not change the resolution</string>
     <string name="exit">Exit</string>
     <string name="no_control_element_selected">No control element selected</string>
     <string name="scale">Scale</string>

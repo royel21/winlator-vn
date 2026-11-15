@@ -468,6 +468,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         } else if (itemId == R.id.menu_item_toggle_fullscreen) {
             renderer.toggleFullscreen();
             drawerLayout.closeDrawers();
+        } else if (itemId == R.id.menu_item_resolution) {
+            showResolutionDialog();
+            drawerLayout.closeDrawers();
         } else if (itemId == R.id.menu_item_task_manager) {
             (new TaskManagerDialog(this)).show();
             drawerLayout.closeDrawers();
@@ -517,6 +520,53 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             exit();
         }
         return true;
+    }
+
+    private static final String[] RESOLUTION_PRESETS = {
+        "640x480", "800x600", "1024x768", "1280x720", "1280x960", "1366x768", "1600x900", "1920x1080"
+    };
+
+    /* Changes the size of Wine's virtual desktop while the container runs; the renderer then scales
+     * the desktop window to the view. Sizes are limited to the X screen the desktop lives in. */
+    private void showResolutionDialog() {
+        final ArrayList<String> sizes = new ArrayList<>();
+        sizes.add(null); // the size the container was started with
+        for (String preset : RESOLUTION_PRESETS) {
+            ScreenInfo size = new ScreenInfo(preset);
+            if (size.width <= screenInfo.width && size.height <= screenInfo.height && !preset.equals(screenInfo.toString())) sizes.add(preset);
+        }
+
+        GLRenderer renderer = xServerView.getRenderer();
+        String current = renderer.getSceneWidth()+"x"+renderer.getSceneHeight();
+        String[] labels = new String[sizes.size()];
+        int checked = 0;
+        for (int i = 0; i < sizes.size(); i++) {
+            String size = sizes.get(i);
+            labels[i] = size != null ? size : getString(R.string.resolution_default, screenInfo.toString());
+            if (size != null && size.equals(current)) checked = i;
+        }
+
+        new android.app.AlertDialog.Builder(this)
+            .setTitle(R.string.resolution)
+            .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                dialog.dismiss();
+                setDesktopResolution(sizes.get(which));
+            })
+            .setNegativeButton(android.R.string.cancel, null)
+            .show();
+    }
+
+    /* size "WxH", or null for the size the desktop was started with */
+    private void setDesktopResolution(final String size) {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            File setres = new File(rootFS.getRootDir(), RootFS.WINEPREFIX+"/drive_c/windows/setres.exe");
+            FileUtils.copy(this, "setres.exe", setres);
+            if (!setres.isFile()) {
+                AppUtils.showToast(this, R.string.resolution_failed);
+                return;
+            }
+            winHandler.exec("C:\\windows\\setres.exe", size != null ? size : "reset");
+        });
     }
 
     public SharedPreferences getPreferences() {
