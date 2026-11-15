@@ -194,6 +194,12 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
                 scrolling = false;
                 fingers[pointerId] = new Finger(event.getX(actionIndex), event.getY(actionIndex));
                 numFingers++;
+                /* Put the cursor under the finger right away: games that pick the hovered item once
+                 * per frame and then act on a click would otherwise get the click in the same
+                 * instant as the move on release and use the item under the old cursor position. */
+                if (moveCursorToTouchpoint && numFingers == 1 && isEnabled()) {
+                    xServer.injectPointerMove(fingers[pointerId].x, fingers[pointerId].y);
+                }
                 break;
             case MotionEvent.ACTION_MOVE:
                 for (byte i = 0; i < MAX_FINGERS; i++) {
