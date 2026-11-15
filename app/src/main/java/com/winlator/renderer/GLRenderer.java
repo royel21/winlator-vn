@@ -384,7 +384,8 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         short x = 0, y = 0, width = defaultSceneWidth, height = defaultSceneHeight;
         int largestArea = 0;
         for (Window child : xServer.windowManager.rootWindow.getChildren()) {
-            if (!child.attributes.isViewable() || !child.isDesktopWindow()) continue;
+            /* mapped, not viewable: shortcuts hide the desktop window but still run the game in it */
+            if (!child.attributes.isMapped() || !child.isDesktopWindow()) continue;
             int area = child.getWidth() * child.getHeight();
             if (child.getWidth() < ScreenInfo.MIN_WIDTH || child.getHeight() < ScreenInfo.MIN_HEIGHT || area <= largestArea) continue;
             largestArea = area;
