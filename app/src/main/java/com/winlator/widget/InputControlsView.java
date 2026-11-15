@@ -286,13 +286,16 @@ public class InputControlsView extends View {
         }
     }
 
-    private void processJoystickInput(ExternalController controller) {
+    /* hasHatAxes: the D-pad comes as hat axes; otherwise it comes as key events (handled in
+     * onKeyEvent) and must not be released here on every stick movement */
+    private void processJoystickInput(ExternalController controller, boolean hasHatAxes) {
         ExternalControllerBinding controllerBinding;
         final int[] axes = {MotionEvent.AXIS_X, MotionEvent.AXIS_Y, MotionEvent.AXIS_Z, MotionEvent.AXIS_RZ, MotionEvent.AXIS_HAT_X, MotionEvent.AXIS_HAT_Y};
         GamepadState state = controller.getGamepadState();
         final float[] values = {state.thumbLX, state.thumbLY, state.thumbRX, state.thumbRY, state.getDPadX(), state.getDPadY()};
 
         for (byte i = 0; i < axes.length; i++) {
+            if (!hasHatAxes && (axes[i] == MotionEvent.AXIS_HAT_X || axes[i] == MotionEvent.AXIS_HAT_Y)) continue;
             if (Math.abs(values[i]) > ControlElement.STICK_DEAD_ZONE) {
                 controllerBinding = controller.getControllerBinding(ExternalControllerBinding.getKeyCodeForAxis(axes[i], Mathf.sign(values[i])));
                 if (controllerBinding != null) handleInputEvent(controllerBinding.getBinding(), true, values[i]);
@@ -320,7 +323,7 @@ public class InputControlsView extends View {
                 controllerBinding = controller.getControllerBinding(KeyEvent.KEYCODE_BUTTON_R2);
                 if (controllerBinding != null) handleInputEvent(controllerBinding.getBinding(), state.isPressed(ExternalController.IDX_BUTTON_R2));
 
-                processJoystickInput(controller);
+                processJoystickInput(controller, ExternalController.hasHatAxes(event));
                 return true;
             }
         }

@@ -168,7 +168,9 @@ public class ExternalController implements GamepadSlot {
         state.thumbRX = getCenteredAxis(event, MotionEvent.AXIS_Z, historyPos);
         state.thumbRY = getCenteredAxis(event, MotionEvent.AXIS_RZ, historyPos);
 
-        if (historyPos == -1) {
+        /* only controllers that report the D-pad as hat axes; on the others the D-pad comes as key
+         * events and the hat values (always 0) would release it on the next stick movement */
+        if (historyPos == -1 && hasHatAxes(event)) {
             float axisX = getCenteredAxis(event, MotionEvent.AXIS_HAT_X, historyPos);
             float axisY = getCenteredAxis(event, MotionEvent.AXIS_HAT_Y, historyPos);
 
@@ -287,6 +289,12 @@ public class ExternalController implements GamepadSlot {
         int sources = device.getSources();
         return !device.isVirtual() && ((sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
                (sources & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK);
+    }
+
+    public static boolean hasHatAxes(MotionEvent event) {
+        InputDevice device = event.getDevice();
+        return device != null && (device.getMotionRange(MotionEvent.AXIS_HAT_X, event.getSource()) != null ||
+                                  device.getMotionRange(MotionEvent.AXIS_HAT_Y, event.getSource()) != null);
     }
 
     public static float getCenteredAxis(MotionEvent event, int axis, int historyPos) {
