@@ -264,24 +264,24 @@ public class ContainerManager {
             removeUniqueVariables(containerData);
 
             // Keep this container's own bookkeeping (app/rootfs versions, applied state, ...) and
-            // lay the imported settings over it, then forget what was applied so the imported
-            // components, drivers and wrappers get applied on the next start.
+            // lay the imported settings over it. The applied state must stay: it records what is
+            // really in this wineprefix, so the next start applies every imported component, driver
+            // and wrapper that differs from it. Cleared, the start compares against the fallback
+            // values instead and skips e.g. switching a native component back to builtin.
+            JSONObject currentData = container.getData();
+            JSONObject mergedExtra = currentData != null && currentData.optJSONObject("extraData") != null ?
+                currentData.optJSONObject("extraData") : new JSONObject();
             JSONObject importedExtra = containerData.optJSONObject("extraData");
             if (importedExtra != null) {
-                JSONObject currentData = container.getData();
-                JSONObject mergedExtra = currentData != null && currentData.optJSONObject("extraData") != null ?
-                    currentData.optJSONObject("extraData") : new JSONObject();
                 Iterator<String> keys = importedExtra.keys();
                 while (keys.hasNext()) {
                     String key = keys.next();
                     mergedExtra.put(key, importedExtra.get(key));
                 }
-                for (String key : APPLIED_STATE_EXTRAS) mergedExtra.remove(key);
-                containerData.put("extraData", mergedExtra);
             }
+            containerData.put("extraData", mergedExtra);
 
             container.loadData(containerData);
-            for (String key : APPLIED_STATE_EXTRAS) container.putExtra(key, null);
             WineUtils.setWinVersion(container, container.getWinVersion());
             container.saveData();
 
