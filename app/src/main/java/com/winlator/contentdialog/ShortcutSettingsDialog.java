@@ -31,8 +31,10 @@ import com.winlator.winhandler.GamepadHandler;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public class ShortcutSettingsDialog extends ContentDialog {
+    private static final int SCREEN_SIZE_AUTO_POSITION = 1;
     private final ShortcutsFragment fragment;
     private final Shortcut shortcut;
     private InputControlsManager inputControlsManager;
@@ -59,7 +61,18 @@ public class ShortcutSettingsDialog extends ContentDialog {
         final EditText etExecArgs = findViewById(R.id.ETExecArgs);
         etExecArgs.setText(shortcut.getExtra("execArgs"));
 
-        ContainerDetailFragment.loadScreenSizeSpinner(getContentView(), shortcut.getExtra("screenSize", shortcut.container.getScreenSize()));
+        /* Auto: use the container's screen size, so the desktop still follows the game's resolution
+         * the way it does for the container; any other entry is kept for this shortcut */
+        final Spinner sScreenSize = findViewById(R.id.SScreenSize);
+        ArrayList<String> screenSizes = new ArrayList<>(Arrays.asList(context.getResources().getStringArray(R.array.screen_size_entries)));
+        screenSizes.add(SCREEN_SIZE_AUTO_POSITION, context.getString(R.string.auto)+" ("+shortcut.container.getScreenSize()+")");
+        sScreenSize.setAdapter(new ArrayAdapter<>(context, android.R.layout.simple_spinner_dropdown_item, screenSizes));
+        String shortcutScreenSize = shortcut.getExtra("screenSize");
+        if (!shortcutScreenSize.isEmpty()) ContainerDetailFragment.loadScreenSizeSpinner(getContentView(), shortcutScreenSize);
+        else {
+            ContainerDetailFragment.loadScreenSizeSpinner(getContentView(), shortcut.container.getScreenSize());
+            sScreenSize.setSelection(SCREEN_SIZE_AUTO_POSITION, false);
+        }
         ContainerDetailFragment.loadScreenOrientationSpinner(getContentView(), shortcut.getExtra("screenOrientation", shortcut.container.getScreenOrientation()));
         final CheckBox cbSwapResolution = findViewById(R.id.CBSwapResolution);
         String swapResExtra = shortcut.getExtra("swapResolution");
@@ -148,7 +161,7 @@ public class ShortcutSettingsDialog extends ContentDialog {
 
                 String execArgs = etExecArgs.getText().toString();
                 shortcut.putExtra("execArgs", !execArgs.isEmpty() ? execArgs : null);
-                shortcut.putExtra("screenSize", !screenSize.equals(shortcut.container.getScreenSize()) ? screenSize : null);
+                shortcut.putExtra("screenSize", sScreenSize.getSelectedItemPosition() != SCREEN_SIZE_AUTO_POSITION ? screenSize : null);
                 String screenOrientation = ContainerDetailFragment.getScreenOrientation(getContentView());
                 shortcut.putExtra("screenOrientation", !screenOrientation.equals(shortcut.container.getScreenOrientation()) ? screenOrientation : null);
                 shortcut.putExtra("swapResolution", cbSwapResolution.isChecked() != shortcut.container.isSwapResolution() ? String.valueOf(cbSwapResolution.isChecked()) : null);

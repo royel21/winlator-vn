@@ -140,7 +140,6 @@ public class Shortcut {
             extra.remove("wmClass");
             extra.remove("path");
 
-            if (!extra.has("screenSize")) extra.put("screenSize", getExtra("screenSize", container.getScreenSize()));
             if (!extra.has("screenOrientation")) extra.put("screenOrientation", getExtra("screenOrientation", container.getScreenOrientation()));
             if (!extra.has("swapResolution")) extra.put("swapResolution", getExtra("swapResolution", String.valueOf(container.isSwapResolution())));
             if (!extra.has("graphicsDriver")) extra.put("graphicsDriver", getExtra("graphicsDriver", container.getGraphicsDriver()));
