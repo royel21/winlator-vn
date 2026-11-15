@@ -93,22 +93,21 @@ public class WinHandler {
     public void exec(final String filename, final String parameters) {
         addAction(() -> {
             byte[] filenameBytes = filename.getBytes();
-            int parametersLength = parameters != null ? parameters.getBytes().length : 0;
-            if (1 + 4 + filenameBytes.length + 4 + parametersLength > sendData.capacity()) {
+            byte[] parametersBytes = parameters != null ? parameters.getBytes() : new byte[0];
+            if (1 + 12 + filenameBytes.length + parametersBytes.length > sendData.capacity()) {
                 /* too long for one request; putting it would throw and stop the send thread */
                 return;
             }
 
+            /* winhandler.exe reads: size, filename length, parameters length, then both strings;
+             * any other layout makes it read a string as a length and crash */
             sendData.rewind();
             sendData.put(RequestCodes.EXEC);
+            sendData.putInt(filenameBytes.length + parametersBytes.length + 8);
             sendData.putInt(filenameBytes.length);
+            sendData.putInt(parametersBytes.length);
             sendData.put(filenameBytes);
-            if (parameters != null) {
-                byte[] parametersBytes = parameters.getBytes();
-                sendData.putInt(parametersBytes.length);
-                sendData.put(parametersBytes);
-            }
-            else sendData.putInt(0);
+            sendData.put(parametersBytes);
             sendPacket(clientPort);
         });
     }
