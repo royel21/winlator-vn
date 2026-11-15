@@ -294,8 +294,12 @@ public class ExternalController implements GamepadSlot {
             }
         }
         int sources = device.getSources();
-        return !device.isVirtual() && ((sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
-               (sources & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK);
+        boolean hasJoystick = (sources & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+        /* Some Bluetooth keyboards also report gamepad buttons; a full keyboard without joystick axes
+         * is a keyboard, or all its keys would be taken as gamepad input and never typed. Profiles
+         * that already map such a device keep working: they look it up by its descriptor. */
+        if (!hasJoystick && device.getKeyboardType() == InputDevice.KEYBOARD_TYPE_ALPHABETIC) return false;
+        return !device.isVirtual() && ((sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD || hasJoystick);
     }
 
     public static boolean hasHatAxes(MotionEvent event) {
