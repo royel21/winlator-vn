@@ -311,7 +311,13 @@ public class InputControlsView extends View {
 
     @Override
     public boolean onGenericMotionEvent(MotionEvent event) {
+        return onControllerMotionEvent(event) || super.onGenericMotionEvent(event);
+    }
 
+    /* Sticks and triggers of a controller the profile has bindings for. The activity calls this
+     * before the gamepad handler, like it does for key events, so all of the controller's input
+     * goes through the profile instead of being split between two gamepads. */
+    public boolean onControllerMotionEvent(MotionEvent event) {
         if (!editMode && profile != null) {
             ExternalController controller = profile.getController(event.getDeviceId());
             if (controller != null && controller.updateStateFromMotionEvent(event)) {
@@ -327,7 +333,7 @@ public class InputControlsView extends View {
                 return true;
             }
         }
-        return super.onGenericMotionEvent(event);
+        return false;
     }
 
     @Override
@@ -465,6 +471,17 @@ public class InputControlsView extends View {
                     }
                     else if (action == KeyEvent.ACTION_UP) {
                         handleInputEvent(controllerBinding.getBinding(), false);
+                    }
+                    return true;
+                }
+
+                /* the controller has no gamepad slot of its own when the profile maps it to its
+                 * gamepad: send its unbound standard buttons there under their usual names */
+                int buttonIdx = ExternalController.getButtonIdxByKeyCode(event.getKeyCode());
+                if (buttonIdx != -1 && profile.isVirtualGamepad() && controller.hasGamepadBindings()) {
+                    int action = event.getAction();
+                    if (action == KeyEvent.ACTION_DOWN || action == KeyEvent.ACTION_UP) {
+                        handleInputEvent(Binding.values()[Binding.GAMEPAD_BUTTON_A.ordinal() + buttonIdx], action == KeyEvent.ACTION_DOWN);
                     }
                     return true;
                 }

@@ -120,11 +120,19 @@ public class GamepadHandler {
         }
 
         if (autoAssign) {
+            /* a controller the profile maps to its gamepad plays through the profile's slot only;
+             * exposing it as well would give the game a second, half-working controller */
+            ArrayList<ExternalController> freeControllers = new ArrayList<>();
+            for (ExternalController controller : connectedControllers) {
+                ExternalController profileController = useVirtualGamepad ? profile.getController(controller.getId()) : null;
+                if (profileController == null || !profileController.hasGamepadBindings()) freeControllers.add(controller);
+            }
+
             if (useVirtualGamepad) gamepadSlots[0] = profile;
             int index = 0;
             for (byte i = 0; i < GAMEPAD_MAX_COUNT; i++) {
                 if (gamepadSlots[i] != null) continue;
-                gamepadSlots[i] = index < connectedControllers.size() ? connectedControllers.get(index) : null;
+                gamepadSlots[i] = index < freeControllers.size() ? freeControllers.get(index) : null;
                 index++;
             }
         }

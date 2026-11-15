@@ -108,6 +108,13 @@ public class ExternalController implements GamepadSlot {
         return null;
     }
 
+    public boolean hasGamepadBindings() {
+        for (ExternalControllerBinding controllerBinding : controllerBindings) {
+            if (controllerBinding.getBinding().isGamepad()) return true;
+        }
+        return false;
+    }
+
     public ExternalControllerBinding getControllerBindingAt(int index) {
         return controllerBindings.get(index);
     }

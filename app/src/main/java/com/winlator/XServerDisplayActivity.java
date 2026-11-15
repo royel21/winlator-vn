@@ -1081,7 +1081,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent event) {
-        return winHandler.onGenericMotionEvent(event) || (!navigationFocused && touchpadView.onExternalMouseEvent(event)) || super.dispatchGenericMotionEvent(event);
+        /* the profile first, like in dispatchKeyEvent: a controller it has bindings for must not
+         * also drive its own gamepad with the sticks while its buttons go to the profile */
+        return inputControlsView.onControllerMotionEvent(event) || winHandler.onGenericMotionEvent(event) ||
+               (!navigationFocused && touchpadView.onExternalMouseEvent(event)) || super.dispatchGenericMotionEvent(event);
     }
 
     @Override
