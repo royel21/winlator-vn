@@ -523,7 +523,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     private static final String[] RESOLUTION_PRESETS = {
-        "640x480", "800x600", "1024x768", "1280x720", "1280x960", "1366x768", "1600x900", "1920x1080"
+        "640x480", "800x600", "1024x576", "1024x768", "1280x720", "1280x960", "1366x768", "1600x900", "1920x1080"
     };
 
     /* The X screen is made large enough for every resolution preset; Wine's virtual desktop starts
@@ -533,13 +533,15 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     }
 
     /* Changes the size of Wine's virtual desktop while the container runs; the renderer then scales
-     * the desktop window to the view. Sizes are limited to the X screen the desktop lives in. */
+     * the desktop window to the view. Only sizes up to the container's screen width are offered,
+     * and they must fit in the X screen the desktop lives in. */
     private void showResolutionDialog() {
         final ArrayList<String> sizes = new ArrayList<>();
         sizes.add(null); // the size the container was started with
         for (String preset : RESOLUTION_PRESETS) {
             ScreenInfo size = new ScreenInfo(preset);
-            if (size.width <= xServer.screenInfo.width && size.height <= xServer.screenInfo.height && !preset.equals(screenInfo.toString())) sizes.add(preset);
+            if (size.width > screenInfo.width || preset.equals(screenInfo.toString())) continue;
+            if (size.width <= xServer.screenInfo.width && size.height <= xServer.screenInfo.height) sizes.add(preset);
         }
 
         GLRenderer renderer = xServerView.getRenderer();
