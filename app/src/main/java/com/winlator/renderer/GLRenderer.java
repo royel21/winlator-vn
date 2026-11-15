@@ -71,13 +71,16 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
     private short sceneY = 0;
     private short sceneWidth;
     private short sceneHeight;
+    /* shown while there is no desktop window: the size Wine's desktop is started with */
+    private short defaultSceneWidth;
+    private short defaultSceneHeight;
     private Runnable onSceneChangedListener;
 
     public GLRenderer(XServerView xServerView, XServer xServer) {
         this.xServerView = xServerView;
         this.xServer = xServer;
-        sceneWidth = xServer.screenInfo.width;
-        sceneHeight = xServer.screenInfo.height;
+        sceneWidth = defaultSceneWidth = xServer.screenInfo.width;
+        sceneHeight = defaultSceneHeight = xServer.screenInfo.height;
         rootCursorDrawable = createRootCursorDrawable();
 
         quadVertices.put(new float[]{
@@ -360,15 +363,25 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
 
     private void updateScene() {
         try (XLock lock = xServer.lock(XServer.Lockable.WINDOW_MANAGER, XServer.Lockable.DRAWABLE_MANAGER)) {
+            updateSceneRect();
             renderableWindows.clear();
             collectRenderableWindows(xServer.windowManager.rootWindow, xServer.windowManager.rootWindow.getX(), xServer.windowManager.rootWindow.getY());
-            updateSceneRect();
         }
+    }
+
+    /* the size Wine's desktop is started with, when the X screen is made larger than it */
+    public void setDefaultSceneSize(short width, short height) {
+        /* set now: the touch view reads the scene size before the GL thread runs */
+        defaultSceneWidth = sceneWidth = width;
+        defaultSceneHeight = sceneHeight = height;
+        viewportNeedsUpdate = true;
+        xServerView.queueEvent(this::updateScene);
+        xServerView.requestRender();
     }
 
     /* Called on the GL thread with the window manager locked */
     private void updateSceneRect() {
-        short x = 0, y = 0, width = xServer.screenInfo.width, height = xServer.screenInfo.height;
+        short x = 0, y = 0, width = defaultSceneWidth, height = defaultSceneHeight;
         int largestArea = 0;
         for (Window child : xServer.windowManager.rootWindow.getChildren()) {
             if (!child.attributes.isViewable() || !child.isDesktopWindow()) continue;
@@ -422,17 +435,19 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
                 short width = window.getWidth();
                 short height = window.getHeight();
                 FullscreenTransformation fullscreenTransformation = null;
+                /* fill the shown desktop, not the whole (larger) X screen */
+                ScreenInfo sceneInfo = new ScreenInfo(sceneWidth, sceneHeight);
 
-                boolean inBounds = width >= ScreenInfo.MIN_WIDTH && height >= ScreenInfo.MIN_HEIGHT && width < xServer.screenInfo.width && height < xServer.screenInfo.height;
+                boolean inBounds = width >= ScreenInfo.MIN_WIDTH && height >= ScreenInfo.MIN_HEIGHT && width < sceneInfo.width && height < sceneInfo.height;
                 if (window.getType() == Window.Type.NORMAL && inBounds && window.hasNoDecorations()) {
                     fullscreenTransformation = window.getFullscreenTransformation();
                     if (fullscreenTransformation == null) window.setFullscreenTransformation(fullscreenTransformation = new FullscreenTransformation(window));
-                    fullscreenTransformation.update(xServer.screenInfo, window.getWidth(), window.getHeight());
+                    fullscreenTransformation.update(sceneInfo, window.getWidth(), window.getHeight());
 
                     if (parent != xServer.windowManager.rootWindow && parent.getChildCount() == 1 && parent.hasDecoration(Decoration.BORDER) && parent.hasDecoration(Decoration.TITLE)) {
                         FullscreenTransformation parentFullscreenTransformation = parent.getFullscreenTransformation();
                         if (parentFullscreenTransformation == null) parent.setFullscreenTransformation(parentFullscreenTransformation = new FullscreenTransformation(parent));
-                        parentFullscreenTransformation.update(xServer.screenInfo, parent.getWidth(), parent.getHeight());
+                        parentFullscreenTransformation.update(sceneInfo, parent.getWidth(), parent.getHeight());
 
                         removeRenderableWindow(parent);
                     }

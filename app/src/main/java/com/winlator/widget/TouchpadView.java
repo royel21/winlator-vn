@@ -261,7 +261,7 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
 
         Finger finger2 = numFingers == 2 ? findSecondFinger(finger1) : null;
         if (finger2 != null) {
-            final float resolutionScale = 1000.0f / Math.min(xServer.screenInfo.width, xServer.screenInfo.height);
+            final float resolutionScale = 1000.0f / Math.min(xServer.getRenderer().getSceneWidth(), xServer.getRenderer().getSceneHeight());
             float currDistance = (float)Math.hypot(finger1.x - finger2.x, finger1.y - finger2.y) * resolutionScale;
 
             if (currDistance < MAX_TWO_FINGERS_SCROLL_DISTANCE) {

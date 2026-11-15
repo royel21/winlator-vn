@@ -1,6 +1,7 @@
 package com.winlator.core;
 
 import com.winlator.math.Mathf;
+import com.winlator.renderer.GLRenderer;
 import com.winlator.xserver.XServer;
 
 import java.util.Timer;
@@ -61,20 +62,27 @@ public class CursorLocker extends TimerTask {
             }
         }
 
-        short x = (short)Mathf.clamp(xServer.pointer.getX(), -maxDistance, xServer.screenInfo.width + maxDistance);
-        short y = (short)Mathf.clamp(xServer.pointer.getY(), -maxDistance, xServer.screenInfo.height + maxDistance);
+        /* keep the pointer on the part of the screen that is shown: Wine's desktop window */
+        GLRenderer renderer = xServer.getRenderer();
+        int left = renderer != null ? renderer.getSceneX() : 0;
+        int top = renderer != null ? renderer.getSceneY() : 0;
+        int right = left + (renderer != null ? renderer.getSceneWidth() : xServer.screenInfo.width);
+        int bottom = top + (renderer != null ? renderer.getSceneHeight() : xServer.screenInfo.height);
 
-        if (x < 0) {
-            xServer.pointer.setX((short)Math.ceil(x * damping));
+        short x = (short)Mathf.clamp(xServer.pointer.getX(), left - maxDistance, right + maxDistance);
+        short y = (short)Mathf.clamp(xServer.pointer.getY(), top - maxDistance, bottom + maxDistance);
+
+        if (x < left) {
+            xServer.pointer.setX((short)Math.ceil(left + (x - left) * damping));
         }
-        else if (x >= xServer.screenInfo.width) {
-            xServer.pointer.setX((short)Math.floor(xServer.screenInfo.width + (x - xServer.screenInfo.width) * damping));
+        else if (x >= right) {
+            xServer.pointer.setX((short)Math.floor(right + (x - right) * damping));
         }
-        if (y < 0) {
-            xServer.pointer.setY((short)Math.ceil(y * damping));
+        if (y < top) {
+            xServer.pointer.setY((short)Math.ceil(top + (y - top) * damping));
         }
-        else if (y >= xServer.screenInfo.height) {
-            xServer.pointer.setY((short)Math.floor(xServer.screenInfo.height + (y - xServer.screenInfo.height) * damping));
+        else if (y >= bottom) {
+            xServer.pointer.setY((short)Math.floor(bottom + (y - bottom) * damping));
         }
     }
 }

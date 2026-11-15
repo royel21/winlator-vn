@@ -319,7 +319,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         preloaderDialog.show(R.string.starting_up);
 
         inputControlsManager = new InputControlsManager(this);
-        xServer = new XServer(this, screenInfo);
+        xServer = new XServer(this, getXScreenSize(screenInfo));
         xServer.setWinHandler(winHandler);
         final boolean[] flags = {false, shortcut != null || getIntent().hasExtra("exec_path")};
         xServer.windowManager.addOnWindowModificationListener(new WindowManager.OnWindowModificationListener() {
@@ -526,6 +526,12 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         "640x480", "800x600", "1024x768", "1280x720", "1280x960", "1366x768", "1600x900", "1920x1080"
     };
 
+    /* The X screen is made large enough for every resolution preset; Wine's virtual desktop starts
+     * at the container's screen size inside it and the renderer shows only the desktop window. */
+    private static ScreenInfo getXScreenSize(ScreenInfo desktopSize) {
+        return new ScreenInfo(Math.max(desktopSize.width, 1920), Math.max(desktopSize.height, 1080));
+    }
+
     /* Changes the size of Wine's virtual desktop while the container runs; the renderer then scales
      * the desktop window to the view. Sizes are limited to the X screen the desktop lives in. */
     private void showResolutionDialog() {
@@ -533,7 +539,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         sizes.add(null); // the size the container was started with
         for (String preset : RESOLUTION_PRESETS) {
             ScreenInfo size = new ScreenInfo(preset);
-            if (size.width <= screenInfo.width && size.height <= screenInfo.height && !preset.equals(screenInfo.toString())) sizes.add(preset);
+            if (size.width <= xServer.screenInfo.width && size.height <= xServer.screenInfo.height && !preset.equals(screenInfo.toString())) sizes.add(preset);
         }
 
         GLRenderer renderer = xServerView.getRenderer();
@@ -637,9 +643,9 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         WineUtils.setWinVersion(container, winVersion);
 
         String desktopTheme = container.getDesktopTheme();
-        if (!(desktopTheme+","+xServer.screenInfo).equals(container.getExtra("desktopTheme"))) {
-            WineThemeManager.apply(this, new WineThemeManager.ThemeInfo(desktopTheme), xServer.screenInfo);
-            container.putExtra("desktopTheme", desktopTheme+","+xServer.screenInfo);
+        if (!(desktopTheme+","+screenInfo).equals(container.getExtra("desktopTheme"))) {
+            WineThemeManager.apply(this, new WineThemeManager.ThemeInfo(desktopTheme), screenInfo);
+            container.putExtra("desktopTheme", desktopTheme+","+screenInfo);
             containerDataChanged = true;
         }
 
@@ -747,7 +753,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             String desktopName = shortcut != null || getIntent().hasExtra("exec_path") ? "nogui" : "shell";
             // 根据 Wine 架构选择正确的可执行文件（x86_64 用 wine64，arm64ec 用 wine）
             String wineExecutable = wineInfo != null ? wineInfo.getExecutable(this, true) : "wine64";
-            String guestExecutable = wineExecutable + " explorer /desktop="+desktopName+","+xServer.screenInfo+" "+getWineStartCommand();
+            String guestExecutable = wineExecutable + " explorer /desktop="+desktopName+","+screenInfo+" "+getWineStartCommand();
             guestProgramLauncherComponent.setGuestExecutable(guestExecutable);
 
             envVars.putAll(container.getEnvVars());
@@ -847,6 +853,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         renderer.setFullscreen(startAsFullscreen);
 
         renderer.setForceWindowsFullscreen(shortcut != null && shortcut.getExtra("forceFullscreen", "0").equals("1"));
+        renderer.setDefaultSceneSize(screenInfo.width, screenInfo.height);
 
         xServer.setRenderer(renderer);
         rootView.addView(xServerView);
