@@ -73,7 +73,15 @@ public class ControlsProfile implements Comparable<ControlsProfile>, GamepadSlot
     }
 
     public boolean isVirtualGamepad() {
-        return virtualGamepad;
+        if (virtualGamepad) return true;
+        /* a profile without on-screen gamepad controls is a gamepad as well when it maps a
+         * physical controller to gamepad buttons and sticks; without a gamepad slot that
+         * input would be dropped */
+        if (!controllersLoaded) loadControllers();
+        for (ExternalController controller : controllers) {
+            if (controller.hasGamepadBindings()) return true;
+        }
+        return false;
     }
 
     @Override
