@@ -2,6 +2,7 @@ package com.winlator.xserver;
 
 import com.winlator.core.Bitmask;
 import com.winlator.math.Mathf;
+import com.winlator.renderer.GLRenderer;
 
 import java.util.ArrayList;
 
@@ -50,12 +51,21 @@ public class Pointer {
         return y;
     }
 
+    /* clamped to the part of the screen the renderer shows (Wine's desktop window) */
     public short getClampedX() {
-        return (short)Mathf.clamp(x, 0, xServer.screenInfo.width -1);
+        GLRenderer renderer = xServer.getRenderer();
+        int min = renderer != null ? Math.max(0, renderer.getSceneX()) : 0;
+        int max = renderer != null ? Math.min(xServer.screenInfo.width, renderer.getSceneX() + renderer.getSceneWidth()) : xServer.screenInfo.width;
+        if (max <= min) { min = 0; max = xServer.screenInfo.width; }
+        return (short)Mathf.clamp(x, min, max - 1);
     }
 
     public short getClampedY() {
-        return (short)Mathf.clamp(y, 0, xServer.screenInfo.height -1);
+        GLRenderer renderer = xServer.getRenderer();
+        int min = renderer != null ? Math.max(0, renderer.getSceneY()) : 0;
+        int max = renderer != null ? Math.min(xServer.screenInfo.height, renderer.getSceneY() + renderer.getSceneHeight()) : xServer.screenInfo.height;
+        if (max <= min) { min = 0; max = xServer.screenInfo.height; }
+        return (short)Mathf.clamp(y, min, max - 1);
     }
 
     public void setPosition(int x, int y) {

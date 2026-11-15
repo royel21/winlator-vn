@@ -17,6 +17,7 @@ import com.winlator.R;
 import com.winlator.core.AppUtils;
 import com.winlator.math.Mathf;
 import com.winlator.math.XForm;
+import com.winlator.renderer.GLRenderer;
 import com.winlator.renderer.ViewTransformation;
 import com.winlator.winhandler.MouseEventFlags;
 import com.winlator.winhandler.WinHandler;
@@ -55,7 +56,13 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
         setClickable(true);
         setFocusable(true);
         setFocusableInTouchMode(true);
-        updateXform(AppUtils.getScreenWidth(), AppUtils.getScreenHeight(), xServer.screenInfo.width, xServer.screenInfo.height);
+        updateXform(AppUtils.getScreenWidth(), AppUtils.getScreenHeight());
+        // the renderer shows Wine's desktop window, which a resolution change resizes
+        xServer.getRenderer().setOnSceneChangedListener(() -> post(() -> {
+            int width = getWidth() > 0 ? getWidth() : AppUtils.getScreenWidth();
+            int height = getHeight() > 0 ? getHeight() : AppUtils.getScreenHeight();
+            updateXform(width, height);
+        }));
 
         setPointerIcon(PointerIcon.load(getResources(), R.drawable.hidden_pointer_arrow)); // 隐藏系统指针
         if (capturePointerOnExternalMouse) {
@@ -89,19 +96,24 @@ public class TouchpadView extends View implements View.OnCapturedPointerListener
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        updateXform(w, h, xServer.screenInfo.width, xServer.screenInfo.height);
+        updateXform(w, h);
     }
 
-    private void updateXform(int outerWidth, int outerHeight, int innerWidth, int innerHeight) {
+    /* view coordinates -> X screen coordinates, through the part of the screen the renderer shows */
+    private void updateXform(int outerWidth, int outerHeight) {
+        GLRenderer renderer = xServer.getRenderer();
+        int innerWidth = renderer.getSceneWidth();
+        int innerHeight = renderer.getSceneHeight();
         ViewTransformation viewTransformation = new ViewTransformation();
         viewTransformation.update(outerWidth, outerHeight, innerWidth, innerHeight);
 
         float invAspect = 1.0f / viewTransformation.aspect;
-        if (!xServer.getRenderer().isFullscreen()) {
+        if (!renderer.isFullscreen()) {
             XForm.makeTranslation(xform, -viewTransformation.viewOffsetX, -viewTransformation.viewOffsetY);
             XForm.scale(xform, invAspect, invAspect);
         }
         else XForm.makeScale(xform, invAspect, invAspect);
+        XForm.translate(xform, renderer.getSceneX(), renderer.getSceneY());
     }
 
     private class Finger {

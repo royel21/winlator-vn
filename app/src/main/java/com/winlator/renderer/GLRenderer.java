@@ -64,10 +64,20 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
     protected short surfaceHeight;
     public final EffectComposer effectComposer = new EffectComposer(this);
     private boolean surfaceCreated = false;
+    /* The part of the X screen shown on the device: Wine's virtual desktop window, which becomes
+     * smaller (or larger) than the screen when a game or the user changes the resolution, so it
+     * is scaled to fill the view instead of sitting in a corner. The whole screen without one. */
+    private short sceneX = 0;
+    private short sceneY = 0;
+    private short sceneWidth;
+    private short sceneHeight;
+    private Runnable onSceneChangedListener;
 
     public GLRenderer(XServerView xServerView, XServer xServer) {
         this.xServerView = xServerView;
         this.xServer = xServer;
+        sceneWidth = xServer.screenInfo.width;
+        sceneHeight = xServer.screenInfo.height;
         rootCursorDrawable = createRootCursorDrawable();
 
         quadVertices.put(new float[]{
@@ -117,7 +127,7 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         surfaceWidth = (short)width;
         surfaceHeight = (short)height;
-        viewTransformation.update(width, height, xServer.screenInfo.width, xServer.screenInfo.height);
+        viewTransformation.update(width, height, sceneWidth, sceneHeight);
         viewportNeedsUpdate = true;
     }
 
@@ -151,16 +161,16 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         float magnifierZoom = !screenOffsetYRelativeToCursor ? this.magnifierZoom : 1.0f;
 
         if (magnifierZoom != 1.0f) {
-            pointerX = Mathf.clamp(xServer.pointer.getX() * magnifierZoom - xServer.screenInfo.width * 0.5f, 0, xServer.screenInfo.width * Math.abs(1.0f - magnifierZoom));
+            pointerX = Mathf.clamp((xServer.pointer.getX() - sceneX) * magnifierZoom - sceneWidth * 0.5f, 0, sceneWidth * Math.abs(1.0f - magnifierZoom));
         }
 
         if (screenOffsetYRelativeToCursor || magnifierZoom != 1.0f) {
             float scaleY = magnifierZoom != 1.0f ? Math.abs(1.0f - magnifierZoom) : 0.5f;
-            float offsetY = xServer.screenInfo.height * (screenOffsetYRelativeToCursor ? 0.25f : 0.5f);
-            pointerY = Mathf.clamp(xServer.pointer.getY() * magnifierZoom - offsetY, 0, xServer.screenInfo.height * scaleY);
+            float offsetY = sceneHeight * (screenOffsetYRelativeToCursor ? 0.25f : 0.5f);
+            pointerY = Mathf.clamp((xServer.pointer.getY() - sceneY) * magnifierZoom - offsetY, 0, sceneHeight * scaleY);
         }
 
-        XForm.makeTransform(tmpXForm2, -pointerX, -pointerY, magnifierZoom, magnifierZoom, 0);
+        XForm.makeTransform(tmpXForm2, -sceneX * magnifierZoom - pointerX, -sceneY * magnifierZoom - pointerY, magnifierZoom, magnifierZoom, 0);
 
         renderWindows();
         if (cursorVisible) renderCursor();
@@ -297,7 +307,7 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
 
     private void renderWindows() {
         windowMaterial.use();
-        windowMaterial.setUniformVec2(windowMaterial.uniforms.viewSize, xServer.screenInfo.width, xServer.screenInfo.height);
+        windowMaterial.setUniformVec2(windowMaterial.uniforms.viewSize, sceneWidth, sceneHeight);
         quadVertices.bind(windowMaterial.programId);
 
         try (XLock lock = xServer.lock(XServer.Lockable.DRAWABLE_MANAGER)) {
@@ -317,7 +327,7 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
 
     private void renderCursor() {
         cursorMaterial.use();
-        cursorMaterial.setUniformVec2(cursorMaterial.uniforms.viewSize, xServer.screenInfo.width, xServer.screenInfo.height);
+        cursorMaterial.setUniformVec2(cursorMaterial.uniforms.viewSize, sceneWidth, sceneHeight);
         quadVertices.bind(cursorMaterial.programId);
 
         try (XLock lock = xServer.lock(XServer.Lockable.DRAWABLE_MANAGER)) {
@@ -352,7 +362,54 @@ public class GLRenderer implements GLSurfaceView.Renderer, WindowManager.OnWindo
         try (XLock lock = xServer.lock(XServer.Lockable.WINDOW_MANAGER, XServer.Lockable.DRAWABLE_MANAGER)) {
             renderableWindows.clear();
             collectRenderableWindows(xServer.windowManager.rootWindow, xServer.windowManager.rootWindow.getX(), xServer.windowManager.rootWindow.getY());
+            updateSceneRect();
         }
+    }
+
+    /* Called on the GL thread with the window manager locked */
+    private void updateSceneRect() {
+        short x = 0, y = 0, width = xServer.screenInfo.width, height = xServer.screenInfo.height;
+        int largestArea = 0;
+        for (Window child : xServer.windowManager.rootWindow.getChildren()) {
+            if (!child.attributes.isViewable() || !child.isDesktopWindow()) continue;
+            int area = child.getWidth() * child.getHeight();
+            if (child.getWidth() < ScreenInfo.MIN_WIDTH || child.getHeight() < ScreenInfo.MIN_HEIGHT || area <= largestArea) continue;
+            largestArea = area;
+            x = child.getX();
+            y = child.getY();
+            width = child.getWidth();
+            height = child.getHeight();
+        }
+
+        if (x == sceneX && y == sceneY && width == sceneWidth && height == sceneHeight) return;
+        sceneX = x;
+        sceneY = y;
+        sceneWidth = width;
+        sceneHeight = height;
+        if (surfaceWidth > 0 && surfaceHeight > 0) viewTransformation.update(surfaceWidth, surfaceHeight, sceneWidth, sceneHeight);
+        viewportNeedsUpdate = true;
+        if (onSceneChangedListener != null) onSceneChangedListener.run();
+    }
+
+    public short getSceneX() {
+        return sceneX;
+    }
+
+    public short getSceneY() {
+        return sceneY;
+    }
+
+    public short getSceneWidth() {
+        return sceneWidth;
+    }
+
+    public short getSceneHeight() {
+        return sceneHeight;
+    }
+
+    /* Runs on the GL thread when the shown part of the screen changes */
+    public void setOnSceneChangedListener(Runnable onSceneChangedListener) {
+        this.onSceneChangedListener = onSceneChangedListener;
     }
 
     private void collectRenderableWindows(Window window, int x, int y) {
