@@ -371,7 +371,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == MainActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE && resultCode == Activity.RESULT_OK) {
+        if (requestCode == MainActivity.EDIT_INPUT_CONTROLS_REQUEST_CODE) {
+            if (inputControlsManager != null) inputControlsManager.loadProfiles(true);
             if (editInputControlsCallback != null) {
                 editInputControlsCallback.run();
                 editInputControlsCallback = null;
@@ -404,6 +405,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     @Override
     public void onResume() {
         super.onResume();
+        if (inputControlsManager != null) inputControlsManager.loadProfiles(true);
         if (environment != null) {
             xServerView.onResume();
             environment.onResume();
@@ -937,6 +939,20 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         final CheckBox cbShowTouchscreenControls = dialog.findViewById(R.id.CBShowTouchscreenControls);
         cbShowTouchscreenControls.setChecked(inputControlsView.isShowTouchscreenControls());
+
+        View btAddProfile = dialog.findViewById(R.id.BTAddProfile);
+        if (btAddProfile != null) {
+            btAddProfile.setOnClickListener((v) -> {
+                ContentDialog.prompt(this, R.string.new_profile, "", (name) -> {
+                    if (name != null && !name.trim().isEmpty()) {
+                        ControlsProfile newProfile = inputControlsManager.createProfile(name.trim());
+                        inputControlsManager.loadProfiles(true);
+                        showInputControls(newProfile);
+                        loadProfileSpinner.run();
+                    }
+                });
+            });
+        }
 
         dialog.findViewById(R.id.BTSettings).setOnClickListener((v) -> {
             int position = sProfile.getSelectedItemPosition();

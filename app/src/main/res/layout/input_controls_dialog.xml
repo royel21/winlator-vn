@@ -15,7 +15,15 @@
         <Spinner
             style="@style/ComboBox"
             android:id="@+id/SProfile"
-            android:layout_width="330dp" />
+            android:layout_width="290dp" />
+
+        <ImageView
+            android:id="@+id/BTAddProfile"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginLeft="8dp"
+            app:tint="?attr/colorPrimary"
+            android:src="@drawable/icon_add" />
 
         <ImageView
             android:id="@+id/BTSettings"

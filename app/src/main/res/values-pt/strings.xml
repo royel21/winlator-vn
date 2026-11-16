@@ -37,6 +37,7 @@
     <string name="profile">Perfil</string>
     <string name="select_profile">Selecione o Perfil</string>
     <string name="profile_name">Nome do Perfil</string>
+    <string name="new_profile">Novo Perfil</string>
     <string name="name">Nome</string>
     <string name="ok">OK</string>
     <string name="cancel">Cancelar</string>

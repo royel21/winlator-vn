@@ -37,6 +37,7 @@
     <string name="profile">Профиль</string>
     <string name="select_profile">Выбрать профиль</string>
     <string name="profile_name">Имя профиля</string>
+    <string name="new_profile">Новый профиль</string>
     <string name="name">Имя</string>
     <string name="ok">OK</string>
     <string name="cancel">Отмена</string>
