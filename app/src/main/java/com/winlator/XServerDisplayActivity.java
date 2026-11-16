@@ -567,8 +567,8 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     /* size "WxH", or null for the size the desktop was started with */
     private void setDesktopResolution(final String size) {
         Executors.newSingleThreadExecutor().execute(() -> {
+            /* shipped in the prefix of the Wine packages (prefixPack) */
             File setres = new File(rootFS.getRootDir(), RootFS.WINEPREFIX+"/drive_c/windows/setres.exe");
-            FileUtils.copy(this, "setres.exe", setres);
             if (!setres.isFile()) {
                 AppUtils.showToast(this, R.string.resolution_failed);
                 return;
