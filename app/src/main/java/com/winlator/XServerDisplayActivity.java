@@ -1042,6 +1042,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             FileUtils.delete(new File(libDir, "libvulkan_freedreno.so"));
             FileUtils.delete(new File(libDir, "libvulkan_vortek.so"));
             FileUtils.delete(new File(libDir, "libGL.so.1.7.0"));
+            FileUtils.delete(new File(libDir, "libgallium-"+DefaultVersion.FREEDRENO+".so"));
 
             File vulkanICDDir = new File(rootDir, "/usr/share/vulkan/icd.d");
             FileUtils.delete(vulkanICDDir);
@@ -1083,6 +1084,13 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 envVars.put("GLADIO_NO_ERROR", "1");
 
                 if (changed || MainActivity.DEBUG_MODE) TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "graphics_driver/gladio-"+DefaultVersion.GLADIO+".tzst", rootDir);
+                break;
+            case GraphicsDrivers.FREEDRENO:
+                /* Mesa's native Adreno OpenGL driver on /dev/kgsl-3d0 (no Zink, no Vulkan) */
+                envVars.remove("GALLIUM_DRIVER");
+                envVars.put("MESA_LOADER_DRIVER_OVERRIDE", "kgsl");
+
+                if (changed) TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, this, "graphics_driver/freedreno-"+DefaultVersion.FREEDRENO+".tzst", rootDir);
                 break;
         }
     }

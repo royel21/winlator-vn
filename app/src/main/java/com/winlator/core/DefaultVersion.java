@@ -11,6 +11,7 @@ public abstract class DefaultVersion {
     public static final String ZINK = "22.2.5";
     public static final String VIRGL = "23.1.9";
     public static final String GLADIO = "1.1";
+    public static final String FREEDRENO = "26.3.0";
     public static final String D8VK = "1.0";
     public static final String D7VK = "2.1";
 
@@ -39,6 +40,7 @@ public abstract class DefaultVersion {
             case "ZINK": return ZINK;
             case "VIRGL": return VIRGL;
             case "GLADIO": return GLADIO;
+            case "FREEDRENO": return FREEDRENO;
             case "D8VK": return D8VK;
             case "VKD3D": return VKD3D;
             case "WINED3D": return WINED3D;
