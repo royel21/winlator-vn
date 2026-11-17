@@ -381,7 +381,7 @@ public class ContainerDetailFragment extends Fragment {
 
         Spinner sOpenGLRender = view.findViewById(R.id.SOpenGLRender);
         if (sOpenGLRender != null) {
-            String useEGL = container != null ? container.getExtra("useEGL", "y") : "y";
+            String useEGL = container != null ? container.getExtra("useEGL", "y") : GraphicsDrivers.getDefaultUseEGL(context);
             sOpenGLRender.setSelection((useEGL.equals("y") || useEGL.equals("t") || useEGL.equals("1")) ? 1 : 0);
         }
 
