@@ -159,7 +159,6 @@ public class GLXExtension extends Extension {
         inputStream.skip(8);
         int shareList = inputStream.readInt();
         boolean isDirect = inputStream.readByte() == 1;
-        android.util.Log.d("GLXExtension", "CreateContext 0x"+Integer.toHexString(contextId)+" direct "+isDirect+" mesa "+isClientSideGLX(client));
 
         /* direct rendering through the client's own GLX: X_GLXCreateContext has no reply */
         if (isDirect && isClientSideGLX(client)) {
@@ -385,7 +384,6 @@ public class GLXExtension extends Extension {
             SparseLongArray contexts = clientDirectContexts.get(client.fd);
             direct = contexts != null && contexts.get(contextId, 0L) != 0;
         }
-        android.util.Log.d("GLXExtension", "IsDirect 0x"+Integer.toHexString(contextId)+" -> "+direct);
         if (!direct) {
             synchronized (clientGLXContexts) {
                 SparseLongArray contexts = clientGLXContexts.get(client.fd);
@@ -430,7 +428,6 @@ public class GLXExtension extends Extension {
     @Override
     public void handleRequest(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
         int opcode = client.getRequestData();
-        android.util.Log.d("GLXExtension", "request "+opcode+" client fd "+client.fd+" mesa "+isClientSideGLX(client)+" length "+client.getRemainingRequestLength());
         switch (opcode) {
             case ClientOpcodes.CREATE_GL_CONTEXT:
                 createGLContext(client, inputStream, outputStream);

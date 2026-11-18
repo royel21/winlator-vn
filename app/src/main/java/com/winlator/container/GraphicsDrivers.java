@@ -82,11 +82,10 @@ public abstract class GraphicsDrivers {
     }
 
     public static String getDefaultDriver(Context context) {
-        /* Freedreno talks to the Adreno kernel driver (/dev/kgsl-3d0), so it is only the default there */
-        return GPUHelper.getAdrenoModelId(context) > 0 ? GraphicsDrivers.TURNIP+","+GraphicsDrivers.FREEDRENO : GraphicsDrivers.VORTEK+","+GraphicsDrivers.DEFAULT_OPENGL_DRIVER;
+        return GPUHelper.getAdrenoModelId(context) > 0 ? GraphicsDrivers.TURNIP+","+GraphicsDrivers.ZINK : GraphicsDrivers.VORTEK+","+GraphicsDrivers.DEFAULT_OPENGL_DRIVER;
     }
 
-    /* WGL (GLX through the selected libGL) for Freedreno; EGL stays the default elsewhere */
+    /* WGL (GLX through the selected libGL, Zink on Adreno); EGL stays the default elsewhere */
     public static String getDefaultUseEGL(Context context) {
         return GPUHelper.getAdrenoModelId(context) > 0 ? "n" : "y";
     }
