@@ -7,6 +7,9 @@
 # meson >= 1.7, python3-mako, arm64 dev packages) without libxcb-keysyms-dev (not in the rootfs).
 #
 # Last built 2026-11-17 from Banners-Turnip e2cf8a1, Mesa main 01638af585b5.
+#
+# VARIANT=std builds the Banners "Standard" driver instead (Adreno 6xx/7xx: Mesa main with
+# only the Linux KGSL patch, no A8xx stack); it is packaged as turnip-<version>-std.tzst.
 set -e
 WORK="${1:-$PWD/turnip-aio-build}"
 BT_REF="${BT_REF:-e2cf8a1}"
@@ -22,13 +25,18 @@ git fetch -q --depth 1 origin "$MESA_COMMIT" && git checkout -q FETCH_HEAD
 
 # Linux (glibc) KGSL patch and the common patches, as bt/build_turnip_linux.sh applies them
 patch -p1 -N --fuzz=3 < ../bt/patches/linux/kgsl-drm-node.patch
-export EXTRA_PATCH=patches/a8xx_gen8.patch
-bash ../bt/patches/common/apply_common.sh .
-# The AIO recipe (bt/.github/workflows/turnip_build_combined.yml, variant "aio")
-patch -p1 -N --fuzz=4 < ../bt/patches/a8xx_gen8.patch
-for s in patches/a710-720.py patches/one/one_gpu_gates.py patches/one/one_fixes.py patches/a8xx_no_double_threadsize.py; do
-    python3 "../bt/$s"
-done
+VARIANT="${VARIANT:-aio}"
+if [ "$VARIANT" = aio ]; then
+    export EXTRA_PATCH=patches/a8xx_gen8.patch
+    bash ../bt/patches/common/apply_common.sh .
+    # The AIO recipe (bt/.github/workflows/turnip_build_combined.yml, variant "aio")
+    patch -p1 -N --fuzz=4 < ../bt/patches/a8xx_gen8.patch
+    for s in patches/a710-720.py patches/one/one_gpu_gates.py patches/one/one_fixes.py patches/a8xx_no_double_threadsize.py; do
+        python3 "../bt/$s"
+    done
+else
+    bash ../bt/patches/common/apply_common.sh .
+fi
 
 cat > ../cross.ini <<EOF
 [binaries]
@@ -68,5 +76,5 @@ cat > pkg/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json <<EOF
     "file_format_version": "1.0.1"
 }
 EOF
-(cd pkg && tar --owner=0 --group=0 --numeric-owner -cf - usr) | zstd -19 -q -o "turnip-$VER-aio.tzst"
-echo "Built $WORK/turnip-$VER-aio.tzst -> copy to app/src/main/assets/graphics_driver/"
+(cd pkg && tar --owner=0 --group=0 --numeric-owner -cf - usr) | zstd -19 -q -o "turnip-$VER-$VARIANT.tzst"
+echo "Built $WORK/turnip-$VER-$VARIANT.tzst -> copy to app/src/main/assets/graphics_driver/"
