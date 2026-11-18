@@ -1132,7 +1132,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             cacheId += dxwrapper;
         }
 
-        String ddrawWrapper = dxwrapperConfig[0].get("ddrawWrapper", DXWrappers.WINED3D);
+        String ddrawWrapper = dxwrapperConfig[0].get("ddrawWrapper", DXWrappers.getDefaultDDrawWrapper(dxwrapper));
         cacheId += "-"+DXWrappers.VKD3D+"-"+dxwrapperConfig[1].get("version", DefaultVersion.VKD3D)+"-"+ddrawWrapper;
         boolean changed = !cacheId.equals(container.getExtra("dxwrapper"));
         VKD3DConfigDialog.setEnvVars(dxwrapperConfig[1], envVars);

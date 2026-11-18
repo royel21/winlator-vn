@@ -34,7 +34,7 @@ public class DXVKConfigDialog extends ContentDialog {
         KeyValueSet config = new KeyValueSet(anchor.getTag());
         AppUtils.setSpinnerSelectionFromIdentifier(sFramerate, config.get("framerate", "0"));
         AppUtils.setSpinnerSelectionFromMemorySize(sMaxDeviceMemory, config.get("maxDeviceMemory", "0"));
-        AppUtils.setSpinnerSelectionFromIdentifier(sDDrawWrapper, config.get("ddrawWrapper", DXWrappers.WINED3D));
+        AppUtils.setSpinnerSelectionFromIdentifier(sDDrawWrapper, config.get("ddrawWrapper", DXWrappers.getDefaultDDrawWrapper(DXWrappers.DXVK)));
 
         String version = config.get("version");
         String defaultVersion = DefaultVersion.DXVK(graphicsDriver);
@@ -59,7 +59,8 @@ public class DXVKConfigDialog extends ContentDialog {
             newConfig.put("maxDeviceMemory", StringUtils.parseMemorySize(sMaxDeviceMemory.getSelectedItem()));
 
             String ddrawWrapper = StringUtils.parseIdentifier(sDDrawWrapper.getSelectedItem());
-            if (!ddrawWrapper.equals(DXWrappers.WINED3D)) newConfig.put("ddrawWrapper", ddrawWrapper);
+            /* always stored: with DXVK a missing value means CNC DDraw */
+            newConfig.put("ddrawWrapper", ddrawWrapper);
 
             GPUCardAdapter.GPUCard gpuCard = (GPUCardAdapter.GPUCard)sCustomDevice.getSelectedItem();
             if (gpuCard.deviceId > 0) {
