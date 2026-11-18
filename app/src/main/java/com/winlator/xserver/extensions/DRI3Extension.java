@@ -98,7 +98,9 @@ public class DRI3Extension extends Extension {
         if (pixmap != null) throw new BadIdChoice(pixmapId);
 
         int fd = inputStream.getAncillaryFd();
-        pixmapFromFd(client, pixmapId, width, height, stride, 0, depth, fd, size);
+        /* Mesa sends size 0 (X servers take the size from the dma-buf): map at least the pixels */
+        long minSize = (long)(stride & 0xffff) * (height & 0xffff);
+        pixmapFromFd(client, pixmapId, width, height, stride & 0xffff, 0, depth, fd, Math.max(size & 0xffffffffL, minSize));
     }
 
     private void bufferFromPixmap(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
