@@ -161,7 +161,12 @@ public class DRI3Extension extends Extension {
     private void pixmapFromFd(XClient client, int pixmapId, short width, short height, int stride, int offset, byte depth, int fd, long size)  throws IOException, XRequestError {
         try {
             ByteBuffer buffer = SysVSharedMemory.mapSHMSegment(fd, size, offset, true);
-            if (buffer == null) throw new BadAlloc();
+            if (buffer == null) {
+                String target = "?";
+                try { target = android.system.Os.readlink("/proc/self/fd/"+fd); } catch (Exception e) {}
+                android.util.Log.w("DRI3Extension", "cannot map pixmap buffer: fd "+fd+" ("+target+") size "+size+" offset "+offset+" "+width+"x"+height+" stride "+stride);
+                throw new BadAlloc();
+            }
 
             short totalWidth = (short)(stride / 4);
             Drawable drawable = xServer.drawableManager.createDrawable(pixmapId, totalWidth, height, depth);

@@ -471,6 +471,11 @@ public class GLXExtension extends Extension {
             case ClientOpcodes.CREATE_CONTEXT_ATTRIBS_ARB:
                 createContextAttribsARB(client, inputStream, outputStream);
                 break;
+            case 20: /* ClientInfo */
+            case 33: /* SetClientInfo2ARB */
+            case 35: /* SetClientInfoARB */
+                /* the client's GL/GLX version info: no reply, nothing to keep */
+                break;
             case 13: /* CreateGLXPixmap */
             case 15: /* DestroyGLXPixmap */
             case 22: /* CreatePixmap */
