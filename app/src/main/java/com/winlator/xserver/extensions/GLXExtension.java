@@ -31,10 +31,20 @@ public class GLXExtension extends Extension {
     private static final byte DEFAULT_FBCONFIG_ID = 1;
     private final SparseArray<SparseLongArray> clientGLXContexts = new SparseArray<>();
     private final SparseArray<SparseLongArray> clientGLContexts = new SparseArray<>();
+    /* contexts a client renders itself (direct rendering through its own libGL, e.g. Mesa DRI3):
+     * the server only hands out the XID, no Gladio context is created for them */
+    private final SparseArray<SparseLongArray> clientDirectContexts = new SparseArray<>();
+    /* clients using a client-side GLX (Mesa) instead of Gladio's libGL: Mesa asks for the visual
+     * configs while setting up its screen, Gladio never does */
+    private final android.util.SparseBooleanArray clientSideGLXClients = new android.util.SparseBooleanArray();
     private final String glxExtensions = "GLX_ARB_create_context GLX_ARB_get_proc_address";
     private final Callback<XClient> onDestroyClientListener = (client) -> {
         destroyAllGLContexts(client.fd);
         destroyAllGLXContexts(client.fd);
+        synchronized (clientDirectContexts) {
+            clientDirectContexts.remove(client.fd);
+            clientSideGLXClients.delete(client.fd);
+        }
     };
 
     static {
@@ -51,9 +61,11 @@ public class GLXExtension extends Extension {
         private static final byte CREATE_CONTEXT = 3;
         private static final byte DESTROY_CONTEXT = 4;
         private static final byte QUERY_VERSION = 7;
+        private static final byte GET_VISUAL_CONFIGS = 14;
         private static final byte QUERY_EXTENSIONS_STRING = 18;
         private static final byte QUERY_SERVER_STRING = 19;
         private static final byte GET_FB_CONFIGS = 21;
+        private static final byte CREATE_NEW_CONTEXT = 24;
         private static final byte CREATE_CONTEXT_ATTRIBS_ARB = 34;
     }
 
@@ -113,11 +125,44 @@ public class GLXExtension extends Extension {
         }
     }
 
+    private void addDirectContext(XClient client, int contextId) throws XRequestError {
+        if (contextId == 0) throw new GLXBadContext();
+        synchronized (clientDirectContexts) {
+            SparseLongArray contexts = clientDirectContexts.get(client.fd);
+            if (contexts == null) {
+                clientDirectContexts.put(client.fd, contexts = new SparseLongArray());
+                client.addOnDestroyListener(onDestroyClientListener);
+            }
+            contexts.put(contextId, 1);
+        }
+    }
+
+    private boolean isClientSideGLX(XClient client) {
+        synchronized (clientDirectContexts) {
+            return clientSideGLXClients.get(client.fd);
+        }
+    }
+
+    private boolean removeDirectContext(XClient client, int contextId) {
+        synchronized (clientDirectContexts) {
+            SparseLongArray contexts = clientDirectContexts.get(client.fd);
+            if (contexts == null || contexts.get(contextId, 0L) == 0) return false;
+            contexts.delete(contextId);
+            return true;
+        }
+    }
+
     private void createContext(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
         int contextId = inputStream.readInt();
         inputStream.skip(8);
         int shareList = inputStream.readInt();
         boolean isDirect = inputStream.readByte() == 1;
+
+        /* direct rendering through the client's own GLX: X_GLXCreateContext has no reply */
+        if (isDirect && isClientSideGLX(client)) {
+            addDirectContext(client, contextId);
+            return;
+        }
 
         if (contextId == 0) throw new GLXBadContext();
         createGLXContextForClient(client, contextId, shareList);
@@ -132,6 +177,7 @@ public class GLXExtension extends Extension {
 
     private void destroyContext(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
         int contextId = inputStream.readInt();
+        if (removeDirectContext(client, contextId)) return;
 
         synchronized (clientGLXContexts) {
             SparseLongArray contexts = clientGLXContexts.get(client.fd);
@@ -206,11 +252,52 @@ public class GLXExtension extends Extension {
         }
     }
 
+    /* GLX 1.2 visual configs: 18 fixed values per visual (Mesa's GLX needs them to match its
+     * configs to X visuals) */
+    private void getVisualConfigs(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
+        inputStream.skip(4);
+
+        synchronized (clientDirectContexts) {
+            if (!clientSideGLXClients.get(client.fd)) {
+                clientSideGLXClients.put(client.fd, true);
+                client.addOnDestroyListener(onDestroyClientListener);
+            }
+        }
+
+        final int[] values = new int[]{
+            xServer.pixmapManager.visual.id, /* visual id */
+            4, /* class: TrueColor */
+            1, /* rgba */
+            8, 8, 8, 8, /* red, green, blue, alpha */
+            0, 0, 0, 0, /* accum red, green, blue, alpha */
+            1, /* double buffer */
+            0, /* stereo */
+            32, /* buffer size */
+            24, /* depth */
+            8, /* stencil */
+            0, /* aux buffers */
+            0, /* level */
+        };
+        final int numVisuals = 1;
+
+        try (XStreamLock lock = outputStream.lock()) {
+            outputStream.writeByte(RESPONSE_CODE_SUCCESS);
+            outputStream.writeByte((byte)0);
+            outputStream.writeShort(client.getSequenceNumber());
+            outputStream.writeInt(numVisuals * values.length);
+            outputStream.writeInt(numVisuals);
+            outputStream.writeInt(values.length);
+            outputStream.writePad(16);
+            for (int value : values) outputStream.writeInt(value);
+        }
+    }
+
     private void getFBConfigs(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
         inputStream.skip(4);
 
         final int numFBConfigs = 1;
-        final int numProperties = 11;
+        /* the visual properties only for Mesa's GLX; Gladio's libGL gets the reply it always got */
+        final int numProperties = isClientSideGLX(client) ? 14 : 11;
         final int[] properties = new int[]{
             GLXEnums.GLX_FBCONFIG_ID, DEFAULT_FBCONFIG_ID,
             GLXEnums.GLX_RED_SIZE, 8,
@@ -222,7 +309,10 @@ public class GLXExtension extends Extension {
             GLXEnums.GLX_BUFFER_SIZE, 32,
             GLXEnums.GLX_DOUBLEBUFFER, 1,
             GLXEnums.GLX_DRAWABLE_TYPE, GLXEnums.GLX_WINDOW_BIT,
-            GLXEnums.GLX_RENDER_TYPE, GLXEnums.GLX_RGBA_BIT
+            GLXEnums.GLX_RENDER_TYPE, GLXEnums.GLX_RGBA_BIT,
+            GLXEnums.GLX_VISUAL_ID, xServer.pixmapManager.visual.id,
+            GLXEnums.GLX_X_VISUAL_TYPE, GLXEnums.GLX_TRUE_COLOR,
+            GLXEnums.GLX_X_RENDERABLE, 1
         };
 
         try (XStreamLock lock = outputStream.lock()) {
@@ -248,8 +338,17 @@ public class GLXExtension extends Extension {
         int fbConfigId = inputStream.readInt();
         inputStream.skip(4);
         int shareContext = inputStream.readInt();
-        inputStream.skip(4);
+        boolean isDirect = inputStream.readByte() == 1;
+        inputStream.skip(3);
         int numAttribs = inputStream.readInt();
+
+        /* direct rendering: the client's libGL creates the context, X_GLXCreateContextAttribsARB
+         * has no reply */
+        if (isDirect && isClientSideGLX(client)) {
+            inputStream.skip(numAttribs * 8);
+            addDirectContext(client, contextId);
+            return;
+        }
 
         if (contextId == 0) throw new GLXBadContext();
         if (fbConfigId != DEFAULT_FBCONFIG_ID) throw new GLXBadFBConfig();
@@ -273,6 +372,16 @@ public class GLXExtension extends Extension {
             outputStream.writeShort(client.getSequenceNumber());
             outputStream.writePad(28);
         }
+    }
+
+    private void createNewContext(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
+        int contextId = inputStream.readInt();
+        inputStream.skip(12); /* fbconfig, screen, render type */
+        inputStream.skip(4); /* share list */
+        boolean isDirect = inputStream.readByte() == 1;
+        inputStream.skip(3);
+        if (!isDirect || !isClientSideGLX(client)) throw new BadImplementation();
+        addDirectContext(client, contextId);
     }
 
     @Override
@@ -300,8 +409,14 @@ public class GLXExtension extends Extension {
             case ClientOpcodes.QUERY_SERVER_STRING:
                 queryServerString(client, inputStream, outputStream);
                 break;
+            case ClientOpcodes.GET_VISUAL_CONFIGS:
+                getVisualConfigs(client, inputStream, outputStream);
+                break;
             case ClientOpcodes.GET_FB_CONFIGS:
                 getFBConfigs(client, inputStream, outputStream);
+                break;
+            case ClientOpcodes.CREATE_NEW_CONTEXT:
+                createNewContext(client, inputStream, outputStream);
                 break;
             case ClientOpcodes.CREATE_CONTEXT_ATTRIBS_ARB:
                 createContextAttribsARB(client, inputStream, outputStream);
