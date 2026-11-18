@@ -88,12 +88,18 @@ index 3a243b6..bda692c 100644
  #include <sys/ioctl.h>
 diff --git a/src/freedreno/drm/kgsl/kgsl_bo.c b/src/freedreno/drm/kgsl/kgsl_bo.c
 new file mode 100644
-index 0000000..6e41245
+index 0000000..c77ec93
 --- /dev/null
 +++ b/src/freedreno/drm/kgsl/kgsl_bo.c
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,282 @@
 +#include "kgsl_priv.h"
 +#include "util/os_mman.h"
++#include "util/os_file.h"
++#include "util/u_math.h"
++
++#include <fcntl.h>
++#include <unistd.h>
++#include <linux/dma-heap.h>
 +
 +static uint64_t
 +kgsl_bo_iova(struct fd_bo *bo)
@@ -154,7 +160,70 @@ index 0000000..6e41245
 +        pipe->funcs->wait(pipe, bo->fences[i], ~0);
 +    }
 +
++    struct kgsl_bo *kgsl_bo = to_kgsl_bo(bo);
++    if (kgsl_bo->bo_type == KGSL_BO_IMPORT && kgsl_bo->import_fd >= 0)
++        close(kgsl_bo->import_fd);
++
 +    fd_bo_fini_common(bo);
++}
++
++/* Buffers shared with other processes (DRI3 window buffers for the X server) must be
++ * exportable as dma-buf: allocate them from a dma-buf heap, as Turnip does, and import
++ * them into KGSL. The X server reads them with the CPU, so prefer an uncached heap. */
++static int
++kgsl_dma_heap_fd(void)
++{
++    static const char *const heaps[] = {
++        "/dev/dma_heap/system-uncached",
++        "/dev/dma_heap/qcom,system-uncached",
++        "/dev/dma_heap/system",
++    };
++    static int heap_fd = -2;
++
++    if (heap_fd == -2) {
++        heap_fd = -1;
++        for (unsigned i = 0; i < ARRAY_SIZE(heaps) && heap_fd < 0; i++) {
++            heap_fd = open(heaps[i], O_RDONLY | O_CLOEXEC);
++            FD_KGSL_TRACE("dma heap %s -> %d (errno %d)", heaps[i], heap_fd, heap_fd < 0 ? errno : 0);
++        }
++        if (heap_fd < 0)
++            ERROR_MSG("no dma-buf heap: shared buffers cannot be allocated");
++    }
++    return heap_fd;
++}
++
++static struct fd_bo *
++kgsl_bo_new_shared(struct fd_device *dev, uint32_t size)
++{
++    int heap_fd = kgsl_dma_heap_fd();
++    struct dma_heap_allocation_data alloc = {
++        .len = align64(size, 4096),
++        .fd_flags = O_RDWR | O_CLOEXEC,
++    };
++    struct fd_bo *bo;
++
++    if (heap_fd < 0)
++        return NULL;
++    if (kgsl_pipe_safe_ioctl(heap_fd, DMA_HEAP_IOCTL_ALLOC, &alloc)) {
++        ERROR_MSG("DMA_HEAP_IOCTL_ALLOC(%u) failed (%s)", (unsigned)alloc.len, strerror(errno));
++        return NULL;
++    }
++    bo = kgsl_bo_from_dmabuf(dev, alloc.fd);
++    close(alloc.fd);
++    FD_KGSL_TRACE("shared bo size %u -> %p", (unsigned)alloc.len, (void *)bo);
++    return bo;
++}
++
++static int
++kgsl_bo_dmabuf(struct fd_bo *bo)
++{
++    struct kgsl_bo *kgsl_bo = to_kgsl_bo(bo);
++
++    if (kgsl_bo->bo_type == KGSL_BO_IMPORT && kgsl_bo->import_fd >= 0)
++        return os_dupfd_cloexec(kgsl_bo->import_fd);
++
++    ERROR_MSG("buffer %u was not allocated as shareable, cannot export it", bo->handle);
++    return -1;
 +}
 +
 +static void *
@@ -200,6 +269,7 @@ index 0000000..6e41245
 +    .madvise = kgsl_bo_madvise,
 +    .cpu_prep = kgsl_bo_cpu_prep,
 +    .destroy = kgsl_bo_destroy,
++    .dmabuf = kgsl_bo_dmabuf,
 +};
 +
 +/* Size is not used by KGSL */
@@ -264,7 +334,8 @@ index 0000000..6e41245
 +
 +    struct kgsl_bo *kgsl_bo = to_kgsl_bo(bo);
 +    kgsl_bo->bo_type = KGSL_BO_IMPORT;
-+    kgsl_bo->import_fd = fd;
++    /* keep our own reference: the caller closes the fd it passed in */
++    kgsl_bo->import_fd = os_dupfd_cloexec(fd);
 +
 +    return bo;
 +}
@@ -277,6 +348,9 @@ index 0000000..6e41245
 +    struct kgsl_gpumem_alloc_id req = {
 +        .size = size,
 +    };
++
++    if (flags & FD_BO_SHARED)
++        return kgsl_bo_new_shared(dev, size);
 +
 +    if (flags & FD_BO_GPUREADONLY)
 +        req.flags |= KGSL_MEMFLAGS_GPUREADONLY;
