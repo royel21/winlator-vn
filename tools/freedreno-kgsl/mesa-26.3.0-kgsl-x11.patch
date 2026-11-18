@@ -1,8 +1,8 @@
 diff --git a/src/freedreno/drm/freedreno_device.c b/src/freedreno/drm/freedreno_device.c
-index 6c64e64..6ee7b74 100644
+index 6c64e64..489a8b3 100644
 --- a/src/freedreno/drm/freedreno_device.c
 +++ b/src/freedreno/drm/freedreno_device.c
-@@ -20,24 +20,62 @@
+@@ -20,24 +20,65 @@
  #include "freedreno_priv.h"
  
  struct fd_device *msm_device_new(int fd, drmVersionPtr version);
@@ -46,8 +46,10 @@ index 6c64e64..6ee7b74 100644
     os_get_page_size(&os_page_size);
  
 +#if HAVE_FREEDRENO_KGSL
++   FD_KGSL_TRACE("fd_device_new fd %d is_kgsl %d", fd, fd_is_kgsl(fd));
 +   if (fd_is_kgsl(fd)) {
 +      dev = kgsl_device_new(fd);
++      FD_KGSL_TRACE("kgsl_device_new -> %p", (void *)dev);
 +      if (!dev)
 +         ERROR_MSG("KGSL device %d did not answer KGSL_PROP_DEVICE_INFO", fd);
 +      goto out;
@@ -56,6 +58,7 @@ index 6c64e64..6ee7b74 100644
 +
     /* figure out if we are kgsl or msm drm driver: */
     version = drmGetVersion(fd);
++   FD_KGSL_TRACE("drmGetVersion(%d) -> %s", fd, version ? (version->name ? version->name : "(no name)") : "NULL");
     if (!version) {
 +#if HAVE_FREEDRENO_KGSL
 +      /* KGSL (/dev/kgsl-3d0) does not implement DRM_IOCTL_VERSION. */
@@ -66,6 +69,23 @@ index 6c64e64..6ee7b74 100644
        ERROR_MSG("cannot get version: %s", strerror(errno));
        return NULL;
     }
+diff --git a/src/freedreno/drm/freedreno_priv.h b/src/freedreno/drm/freedreno_priv.h
+index 3a243b6..bda692c 100644
+--- a/src/freedreno/drm/freedreno_priv.h
++++ b/src/freedreno/drm/freedreno_priv.h
+@@ -13,6 +13,12 @@
+ #include <fcntl.h>
+ #include <stdio.h>
+ #include <stdlib.h>
++
++/* FD_KGSL_TRACE=1: print each freedreno-on-KGSL setup step to stderr */
++#define FD_KGSL_TRACE(...) do { \
++   if (getenv("FD_KGSL_TRACE")) { fprintf(stderr, "[fd-kgsl] " __VA_ARGS__); fputc('\n', stderr); } \
++} while (0)
++#include <stdlib.h>
+ #include <string.h>
+ #include <unistd.h>
+ #include <sys/ioctl.h>
 diff --git a/src/freedreno/drm/kgsl/kgsl_bo.c b/src/freedreno/drm/kgsl/kgsl_bo.c
 new file mode 100644
 index 0000000..6e41245
@@ -282,10 +302,10 @@ index 0000000..6e41245
 +}
 diff --git a/src/freedreno/drm/kgsl/kgsl_device.c b/src/freedreno/drm/kgsl/kgsl_device.c
 new file mode 100644
-index 0000000..563fc5c
+index 0000000..8ff22dc
 --- /dev/null
 +++ b/src/freedreno/drm/kgsl/kgsl_device.c
-@@ -0,0 +1,43 @@
+@@ -0,0 +1,46 @@
 +#include "kgsl_priv.h"
 +
 +static const struct fd_device_funcs funcs = {
@@ -305,8 +325,11 @@ index 0000000..563fc5c
 +    struct kgsl_devinfo info;
 +
 +    /* Try to read the device info to detect if the FD is really KGSL */
-+    if(kgsl_get_prop(fd, KGSL_PROP_DEVICE_INFO, &info, sizeof(info)))
++    if(kgsl_get_prop(fd, KGSL_PROP_DEVICE_INFO, &info, sizeof(info))) {
++        FD_KGSL_TRACE("KGSL_PROP_DEVICE_INFO failed: errno %d", errno);
 +        return NULL;
++    }
++    FD_KGSL_TRACE("device info: chip_id 0x%x gmem %u", info.chip_id, (unsigned)info.gmem_sizebytes);
 +
 +    kgsl_dev = calloc(1, sizeof(*kgsl_dev));
 +    if (!kgsl_dev)
@@ -331,10 +354,10 @@ index 0000000..563fc5c
 +}
 diff --git a/src/freedreno/drm/kgsl/kgsl_pipe.c b/src/freedreno/drm/kgsl/kgsl_pipe.c
 new file mode 100644
-index 0000000..612896c
+index 0000000..f46777b
 --- /dev/null
 +++ b/src/freedreno/drm/kgsl/kgsl_pipe.c
-@@ -0,0 +1,208 @@
+@@ -0,0 +1,213 @@
 +#include "kgsl_priv.h"
 +#include "freedreno_ringbuffer_sp.h"
 +
@@ -507,12 +530,16 @@ index 0000000..612896c
 +    pipe->funcs = &pipe_funcs;
 +
 +    struct kgsl_devinfo info;
-+    if(kgsl_get_prop(dev->fd, KGSL_PROP_DEVICE_INFO, &info, sizeof(info)))
++    if(kgsl_get_prop(dev->fd, KGSL_PROP_DEVICE_INFO, &info, sizeof(info))) {
++        FD_KGSL_TRACE("pipe: KGSL_PROP_DEVICE_INFO failed: errno %d", errno);
 +        goto fail;
++    }
 +
 +    uint64_t gmem_iova;
-+    if(kgsl_get_prop(dev->fd, KGSL_PROP_UCHE_GMEM_VADDR, &gmem_iova, sizeof(gmem_iova)))
++    if(kgsl_get_prop(dev->fd, KGSL_PROP_UCHE_GMEM_VADDR, &gmem_iova, sizeof(gmem_iova))) {
++        FD_KGSL_TRACE("pipe: KGSL_PROP_UCHE_GMEM_VADDR failed: errno %d", errno);
 +        goto fail;
++    }
 +
 +    kgsl_pipe->dev_id.gpu_id =
 +        ((info.chip_id >> 24) & 0xff) * 100 +
@@ -530,6 +557,7 @@ index 0000000..612896c
 +    };
 +
 +    int ret = kgsl_pipe_safe_ioctl(dev->fd, IOCTL_KGSL_DRAWCTXT_CREATE, &req);
++    FD_KGSL_TRACE("pipe: gpu_id %u chip_id 0x%x drawctxt_create ret %d errno %d", kgsl_pipe->dev_id.gpu_id, info.chip_id, ret, ret ? errno : 0);
 +    if(ret)
 +        goto fail;
 +
@@ -765,6 +793,19 @@ index 944ce83..c392dac 100644
  libfreedreno_drm_virtio_files = files(
    'virtio/virtio_bo.c',
    'virtio/virtio_device.c',
+diff --git a/src/gallium/drivers/freedreno/freedreno_screen.c b/src/gallium/drivers/freedreno/freedreno_screen.c
+index 9eb7bd8..1b7b6d8 100644
+--- a/src/gallium/drivers/freedreno/freedreno_screen.c
++++ b/src/gallium/drivers/freedreno/freedreno_screen.c
+@@ -969,6 +969,8 @@ fd_screen_create(int fd,
+ 
+    // maybe this should be in context?
+    screen->pipe = fd_pipe_new(screen->dev, FD_PIPE_3D);
++   if (getenv("FD_KGSL_TRACE"))
++      fprintf(stderr, "[fd-kgsl] fd_screen_create: pipe %p\n", (void *)screen->pipe);
+    if (!screen->pipe) {
+       DBG("could not create 3d pipe");
+       goto fail;
 diff --git a/src/gallium/frontends/dri/loader_dri3_helper.c b/src/gallium/frontends/dri/loader_dri3_helper.c
 index eb2894c..e1e8ab1 100644
 --- a/src/gallium/frontends/dri/loader_dri3_helper.c
@@ -996,19 +1037,68 @@ index eb2894c..e1e8ab1 100644
  no_fence:
     free(buffer);
  no_buffer:
+diff --git a/src/glx/dri3_glx.c b/src/glx/dri3_glx.c
+index 1ffd915..f94ec15 100644
+--- a/src/glx/dri3_glx.c
++++ b/src/glx/dri3_glx.c
+@@ -520,6 +520,8 @@ dri3_create_screen(int screen, struct glx_display * priv, bool driver_name_is_in
+    }
+    priv->driver = GLX_DRIVER_DRI3;
+ 
++   if (getenv("FD_KGSL_TRACE"))
++      fprintf(stderr, "[fd-kgsl] glx dri3: render fd %d display fd %d driver %s\n", psc->fd_render_gpu, psc->fd_display_gpu, driverName);
+    if (!dri_screen_init(&psc->base, priv, screen, psc->fd_render_gpu, &loader_funcs, driver_name_is_inferred)) {
+       ErrorMessageF("glx: failed to create dri3 screen\n");
+       goto handle_error;
+diff --git a/src/loader/loader.c b/src/loader/loader.c
+index 39773cc..af7ef66 100644
+--- a/src/loader/loader.c
++++ b/src/loader/loader.c
+@@ -650,6 +650,17 @@ bool loader_get_user_preferred_fd(int *fd_render_gpu, int *original_fd)
+    bool is_render_and_display_gpu_diff;
+    drmDevicePtr render_dev, preferred_dev;
+    bool debug = debug_get_bool_option("DRI_PRIME_DEBUG", false);
++   const char *override = os_get_option("MESA_LOADER_DRIVER_OVERRIDE");
++
++   /* freedreno on KGSL: /dev/kgsl-3d0 is the only GPU node; on some kernels
++    * libdrm still finds a DRM device behind it in sysfs and the fd would be
++    * swapped for a node the KGSL backend cannot use.
++    */
++   if (override && !strcmp(override, "kgsl")) {
++      if (original_fd)
++         *original_fd = *fd_render_gpu;
++      return false;
++   }
+ 
+    if (drmGetDevice2(*fd_render_gpu, 0, &render_dev) != 0)
+       return false;
+@@ -750,6 +761,10 @@ loader_get_linux_pci_id_for_fd(int fd, int *vendor_id, int *chip_id)
+ bool
+ loader_get_pci_id_for_fd(int fd, int *vendor_id, int *chip_id)
+ {
++   const char *override = os_get_option("MESA_LOADER_DRIVER_OVERRIDE");
++   if (override && !strcmp(override, "kgsl"))
++      return false;
++
+ #ifdef __linux__
+    /* Implementation without causing full enumeration of DRM devices. */
+    if (loader_get_linux_pci_id_for_fd(fd, vendor_id, chip_id))
 diff --git a/src/x11/x11_dri3.c b/src/x11/x11_dri3.c
-index 3587d24..76d34cb 100644
+index 3587d24..f539176 100644
 --- a/src/x11/x11_dri3.c
 +++ b/src/x11/x11_dri3.c
-@@ -25,6 +25,7 @@
+@@ -25,7 +25,10 @@
  
  #include <stdbool.h>
  #include <stdlib.h>
 +#include <string.h>
  #include <fcntl.h>
++#include <errno.h>
++#include <stdio.h>
  #include <unistd.h>
  #include <xcb/xcb.h>
-@@ -48,6 +49,13 @@ x11_dri3_open(xcb_connection_t *conn,
+ #include <xcb/dri3.h>
+@@ -48,6 +51,17 @@ x11_dri3_open(xcb_connection_t *conn,
     int                          fd;
     const xcb_query_extension_reply_t *extension;
  
@@ -1016,8 +1106,12 @@ index 3587d24..76d34cb 100644
 +    * to hand out, so open the GPU directly.
 +    */
 +   const char *override = getenv("MESA_LOADER_DRIVER_OVERRIDE");
-+   if (override && !strcmp(override, "kgsl"))
-+      return open("/dev/kgsl-3d0", O_RDWR | O_CLOEXEC);
++   if (override && !strcmp(override, "kgsl")) {
++      fd = open("/dev/kgsl-3d0", O_RDWR | O_CLOEXEC);
++      if (getenv("FD_KGSL_TRACE"))
++         fprintf(stderr, "[fd-kgsl] open /dev/kgsl-3d0 -> fd %d (errno %d)\n", fd, fd < 0 ? errno : 0);
++      return fd;
++   }
 +
     xcb_prefetch_extension_data(conn, &xcb_dri3_id);
     extension = xcb_get_extension_data(conn, &xcb_dri3_id);
