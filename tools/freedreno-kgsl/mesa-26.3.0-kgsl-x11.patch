@@ -1,8 +1,8 @@
 diff --git a/src/freedreno/drm/freedreno_device.c b/src/freedreno/drm/freedreno_device.c
-index 6c64e64..88df4dd 100644
+index 6c64e64..6ee7b74 100644
 --- a/src/freedreno/drm/freedreno_device.c
 +++ b/src/freedreno/drm/freedreno_device.c
-@@ -20,6 +20,9 @@
+@@ -20,24 +20,62 @@
  #include "freedreno_priv.h"
  
  struct fd_device *msm_device_new(int fd, drmVersionPtr version);
@@ -12,7 +12,48 @@ index 6c64e64..88df4dd 100644
  #ifdef HAVE_FREEDRENO_VIRTIO
  struct fd_device *virtio_device_new(int fd, drmVersionPtr version);
  #endif
-@@ -38,6 +41,12 @@ fd_device_new(int fd)
+ 
+ uint64_t os_page_size = 4096;
+ 
++#if HAVE_FREEDRENO_KGSL
++/* Is fd an Android KGSL node (/dev/kgsl-3d0)?  KGSL dispatches ioctls by
++ * number alone, so a DRM ioctl such as DRM_IOCTL_VERSION may reach an
++ * unrelated KGSL handler on some kernels instead of failing.
++ */
++static bool
++fd_is_kgsl(int fd)
++{
++   char path[32], target[64];
++   ssize_t len;
++
++   snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
++   len = readlink(path, target, sizeof(target) - 1);
++   if (len <= 0)
++      return false;
++   target[len] = 0;
++   return !strncmp(target, "/dev/kgsl", 9);
++}
++#endif
++
+ struct fd_device *
+ fd_device_new(int fd)
+ {
+    struct fd_device *dev = NULL;
+-   drmVersionPtr version;
++   drmVersionPtr version = NULL;
+    bool use_heap = false;
+ 
+    os_get_page_size(&os_page_size);
+ 
++#if HAVE_FREEDRENO_KGSL
++   if (fd_is_kgsl(fd)) {
++      dev = kgsl_device_new(fd);
++      if (!dev)
++         ERROR_MSG("KGSL device %d did not answer KGSL_PROP_DEVICE_INFO", fd);
++      goto out;
++   }
++#endif
++
     /* figure out if we are kgsl or msm drm driver: */
     version = drmGetVersion(fd);
     if (!version) {
