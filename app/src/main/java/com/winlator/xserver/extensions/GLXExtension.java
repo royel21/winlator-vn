@@ -60,12 +60,14 @@ public class GLXExtension extends Extension {
         private static final byte DESTROY_GL_CONTEXT = 2;
         private static final byte CREATE_CONTEXT = 3;
         private static final byte DESTROY_CONTEXT = 4;
+        private static final byte IS_DIRECT = 6;
         private static final byte QUERY_VERSION = 7;
         private static final byte GET_VISUAL_CONFIGS = 14;
         private static final byte QUERY_EXTENSIONS_STRING = 18;
         private static final byte QUERY_SERVER_STRING = 19;
         private static final byte GET_FB_CONFIGS = 21;
         private static final byte CREATE_NEW_CONTEXT = 24;
+        private static final byte GET_DRAWABLE_ATTRIBUTES = 29;
         private static final byte CREATE_CONTEXT_ATTRIBS_ARB = 34;
     }
 
@@ -374,6 +376,45 @@ public class GLXExtension extends Extension {
         }
     }
 
+    /* Mesa checks every new context with a glXIsDirect round trip */
+    private void isDirect(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
+        int contextId = inputStream.readInt();
+        boolean direct;
+        synchronized (clientDirectContexts) {
+            SparseLongArray contexts = clientDirectContexts.get(client.fd);
+            direct = contexts != null && contexts.get(contextId, 0L) != 0;
+        }
+        if (!direct) {
+            synchronized (clientGLXContexts) {
+                SparseLongArray contexts = clientGLXContexts.get(client.fd);
+                if (contexts == null || contexts.get(contextId, 0L) == 0) throw new GLXBadContext();
+            }
+        }
+
+        try (XStreamLock lock = outputStream.lock()) {
+            outputStream.writeByte(RESPONSE_CODE_SUCCESS);
+            outputStream.writeByte((byte)0);
+            outputStream.writeShort(client.getSequenceNumber());
+            outputStream.writeInt(0);
+            outputStream.writeByte((byte)(direct ? 1 : 0));
+            outputStream.writePad(23);
+        }
+    }
+
+    /* No GLX drawables are tracked here: an empty list makes Mesa fall back to the window's visual */
+    private void getDrawableAttributes(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
+        inputStream.skip(4);
+
+        try (XStreamLock lock = outputStream.lock()) {
+            outputStream.writeByte(RESPONSE_CODE_SUCCESS);
+            outputStream.writeByte((byte)0);
+            outputStream.writeShort(client.getSequenceNumber());
+            outputStream.writeInt(0);
+            outputStream.writeInt(0);
+            outputStream.writePad(20);
+        }
+    }
+
     private void createNewContext(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {
         int contextId = inputStream.readInt();
         inputStream.skip(12); /* fbconfig, screen, render type */
@@ -400,6 +441,12 @@ public class GLXExtension extends Extension {
             case ClientOpcodes.DESTROY_CONTEXT:
                 destroyContext(client, inputStream, outputStream);
                 break;
+            case ClientOpcodes.IS_DIRECT:
+                isDirect(client, inputStream, outputStream);
+                break;
+            case ClientOpcodes.GET_DRAWABLE_ATTRIBUTES:
+                getDrawableAttributes(client, inputStream, outputStream);
+                break;
             case ClientOpcodes.QUERY_VERSION:
                 queryVersion(client, inputStream, outputStream);
                 break;
@@ -420,6 +467,19 @@ public class GLXExtension extends Extension {
                 break;
             case ClientOpcodes.CREATE_CONTEXT_ATTRIBS_ARB:
                 createContextAttribsARB(client, inputStream, outputStream);
+                break;
+            case 13: /* CreateGLXPixmap */
+            case 15: /* DestroyGLXPixmap */
+            case 22: /* CreatePixmap */
+            case 23: /* DestroyPixmap */
+            case 27: /* CreatePbuffer */
+            case 28: /* DestroyPbuffer */
+            case 30: /* ChangeDrawableAttributes */
+            case 31: /* CreateWindow */
+            case 32: /* DeleteWindow */
+                /* Mesa's client-side GLX renders into these drawables itself (DRI3): the
+                 * requests have no reply and need no server state */
+                if (!isClientSideGLX(client)) throw new BadImplementation();
                 break;
             default:
                 throw new BadImplementation();
