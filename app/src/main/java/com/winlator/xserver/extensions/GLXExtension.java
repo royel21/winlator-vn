@@ -487,6 +487,11 @@ public class GLXExtension extends Extension {
             default:
                 throw new BadImplementation();
         }
+
+        /* the request dispatcher only skips unread request bytes when a handler throws:
+         * handlers that ignore part of a request (direct contexts, the drawable requests,
+         * padding) would leave the stream out of step with the next request */
+        if (client.getRemainingRequestLength() > 0) client.skipRequest();
     }
 
     @Keep
