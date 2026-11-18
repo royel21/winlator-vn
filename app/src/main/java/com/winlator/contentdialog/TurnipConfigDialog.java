@@ -38,7 +38,10 @@ public class TurnipConfigDialog extends ContentDialog {
 
         setOnConfirmCallback(() -> {
             KeyValueSet newConfig = new KeyValueSet();
-            newConfig.put("version", StringUtils.parseNumber(sVersion.getSelectedItem()));
+            /* builtin versions such as "27.0.0-aio" are asset names: keep them whole */
+            String selectedVersion = String.valueOf(sVersion.getSelectedItem());
+            newConfig.put("version", GeneralComponents.isBuiltinComponent(GeneralComponents.Type.TURNIP, selectedVersion) ?
+                                     selectedVersion : StringUtils.parseNumber(selectedVersion));
             newConfig.put("maxDeviceMemory", StringUtils.parseMemorySize(sMaxDeviceMemory.getSelectedItem()));
             newConfig.put("directRendering", cbDirectRendering.isChecked() ? "1" : "0");
             newConfig.put("presentMode", sPresentMode.getSelectedItemPosition());
