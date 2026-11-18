@@ -1042,7 +1042,7 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             FileUtils.delete(new File(libDir, "libvulkan_freedreno.so"));
             FileUtils.delete(new File(libDir, "libvulkan_vortek.so"));
             FileUtils.delete(new File(libDir, "libGL.so.1.7.0"));
-            FileUtils.delete(new File(libDir, "libgallium-"+DefaultVersion.FREEDRENO+".so"));
+            FileUtils.delete(new File(libDir, "libgallium-26.3.0.so"));
 
             File vulkanICDDir = new File(rootDir, "/usr/share/vulkan/icd.d");
             FileUtils.delete(vulkanICDDir);
