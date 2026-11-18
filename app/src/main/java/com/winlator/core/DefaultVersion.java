@@ -12,7 +12,7 @@ public abstract class DefaultVersion {
     public static final String VIRGL = "23.1.9";
     public static final String GLADIO = "1.1";
     /* package revision: a new value makes containers extract the driver again */
-    public static final String FREEDRENO = "26.3.0-5";
+    public static final String FREEDRENO = "26.3.0-6";
     public static final String D8VK = "1.0";
     public static final String D7VK = "2.1";
 
