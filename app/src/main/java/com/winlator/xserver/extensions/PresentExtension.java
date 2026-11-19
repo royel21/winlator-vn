@@ -196,6 +196,13 @@ public class PresentExtension extends Extension implements WindowManager.OnWindo
             }
             else content.forceUpdate();
         }
+
+        /* count the frame for the FPS display like copies of GL frames: forceUpdate() does not
+         * report updates of offscreen (redirected) windows, which Vulkan presents to */
+        if (xServer.activity != null && windowId != xServer.activity.frameRatingWindowId)
+            xServer.activity.changeFrameRatingVisibility(window, true);
+        if (content.isOffscreenStorage() && !content.isUseSharedData())
+            xServer.windowManager.triggerOnUpdateWindowContent(window);
     }
 
     private void selectInput(XClient client, XInputStream inputStream, XOutputStream outputStream) throws IOException, XRequestError {

@@ -1440,9 +1440,14 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
                 frameRating.reset();
             }
         }
-        else if (window.id == frameRatingWindowId) {
-            frameRatingWindowId = -1;
-            runOnUiThread(() -> frameRating.setVisibility(View.GONE));
+        else if (frameRatingWindowId != -1) {
+            /* also when a parent of the measured window is unmapped or it is already gone, as
+             * happens when a program quits: its child windows are destroyed without an unmap */
+            Window frameRatingWindow = xServer.windowManager.getWindow(frameRatingWindowId);
+            if (frameRatingWindow == null || window == frameRatingWindow || window.isAncestorOf(frameRatingWindow)) {
+                frameRatingWindowId = -1;
+                runOnUiThread(() -> frameRating.setVisibility(View.GONE));
+            }
         }
     }
 
