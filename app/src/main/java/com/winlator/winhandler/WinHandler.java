@@ -494,12 +494,13 @@ public class WinHandler {
                 break;
             }
             case RequestCodes.NET_DRIVE_START: {
-                /* reply "127.0.0.1:<port> <user> <password>" of the rclone server, empty on failure */
+                /* reply "127.0.0.1:<port> <user> <password>" of the rclone server, or "ERR <reason>" */
                 if (netDriveServer == null) netDriveServer = new NetDriveServer(activity);
                 final NetDriveServer server = netDriveServer;
                 Executors.newSingleThreadExecutor().execute(() -> {
-                    byte[] reply = server.start().getBytes(StandardCharsets.UTF_8);
-                    addAction(() -> sendPacket(port, reply.length > 0 ? reply : new byte[]{0}));
+                    String info = server.start();
+                    byte[] reply = (info.isEmpty() ? "ERR " + server.getLastError() : info).getBytes(StandardCharsets.UTF_8);
+                    addAction(() -> sendPacket(port, reply));
                 });
                 break;
             }

@@ -27,6 +27,7 @@ class NetDriveServer {
     private int port;
     private String user;
     private String password;
+    private String lastError = "";
 
     NetDriveServer(Context context) {
         this.context = context;
@@ -82,8 +83,25 @@ class NetDriveServer {
         }
     }
 
+    /* why the last start failed, shown by WFM */
+    synchronized String getLastError() {
+        return lastError;
+    }
+
+    private String readOutput(File dir) {
+        File out = new File(dir, "rclone.out");
+        try {
+            byte[] data = java.nio.file.Files.readAllBytes(out.toPath());
+            String text = new String(data).trim();
+            return text.length() > 300 ? text.substring(text.length() - 300) : text;
+        }
+        catch (IOException e) {
+            return "";
+        }
+    }
+
     /* Starts rclone if needed and returns "127.0.0.1:<port> <user> <password>",
-     * or an empty string when it can't be started. */
+     * or an empty string when it can't be started (see getLastError()). */
     synchronized String start() {
         if (process != null && process.isAlive() && isListening(port))
             return "127.0.0.1:" + port + " " + user + " " + password;
@@ -111,17 +129,24 @@ class NetDriveServer {
                 "--log-file=" + new File(dir, "rclone.log").getPath());
             builder.environment().put("HOME", dir.getPath());
             builder.redirectErrorStream(true);
-            builder.redirectOutput(ProcessBuilder.Redirect.appendTo(new File(dir, "rclone.out")));
+            builder.redirectOutput(new File(dir, "rclone.out"));
             process = builder.start();
 
             for (int i = 0; i < 100; i++) {
-                if (isListening(port)) return "127.0.0.1:" + port + " " + user + " " + password;
+                if (isListening(port)) {
+                    lastError = "";
+                    return "127.0.0.1:" + port + " " + user + " " + password;
+                }
                 if (!process.isAlive()) break;
                 Thread.sleep(100);
             }
-            Log.e(TAG, "rclone did not start");
+            String output = readOutput(dir);
+            lastError = process.isAlive() ? "rclone did not answer. " + output :
+                "rclone exited (" + process.exitValue() + "). " + output;
+            Log.e(TAG, lastError);
         }
-        catch (IOException | InterruptedException e) {
+        catch (IOException | InterruptedException | RuntimeException e) {
+            lastError = e.toString();
             Log.e(TAG, "rclone failed to start", e);
         }
         stop();
