@@ -104,6 +104,15 @@ public class Keyboard {
         }
     }
 
+    /* true when the character is the shifted symbol of the key and Shift is not held */
+    private boolean needsShift(byte keycode, int unicodeChar) {
+        if (unicodeChar == 0 || modifiersMask.isSet(getModifierFlag(XKeycode.KEY_SHIFT_L.id))) return false;
+        /* Caps Lock already gives the capital letters */
+        if (Character.isLetter(unicodeChar) && modifiersMask.isSet(getModifierFlag(XKeycode.KEY_CAPS_LOCK.id))) return false;
+        int index = (keycode & 0xFF) - MIN_KEYCODE;
+        return keysyms[index*KEYSYMS_PER_KEYCODE+1] == unicodeChar && keysyms[index*KEYSYMS_PER_KEYCODE] != unicodeChar;
+    }
+
     public boolean onKeyEvent(KeyEvent event) {
         if (ExternalController.isGameController(event.getDevice())) return false;
 
@@ -117,7 +126,14 @@ public class Keyboard {
                 int unicodeChar = event.getUnicodeChar();
                 if (xKeycode == XKeycode.KEY_ENTER || xKeycode == XKeycode.KEY_TAB || xKeycode == XKeycode.KEY_ESC ||
                     xKeycode == XKeycode.KEY_BKSP || xKeycode == XKeycode.KEY_DEL) unicodeChar = 0;
-                xServer.injectKeyPress(xKeycode, unicodeChar);
+                if (needsShift(xKeycode.id, unicodeChar)) {
+                    /* e.g. "@" from an on-screen keyboard arrives as the "2" key without a
+                     * Shift key event; press Shift around it so Wine gets "@" and not "2" */
+                    xServer.injectKeyPress(XKeycode.KEY_SHIFT_L);
+                    xServer.injectKeyPress(xKeycode, unicodeChar);
+                    xServer.injectKeyRelease(XKeycode.KEY_SHIFT_L);
+                }
+                else xServer.injectKeyPress(xKeycode, unicodeChar);
             }
             else {
                 xServer.injectKeyRelease(xKeycode);
