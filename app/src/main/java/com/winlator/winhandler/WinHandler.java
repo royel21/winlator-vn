@@ -52,6 +52,7 @@ public class WinHandler {
     private MIDIHandler midiHandler;
     public final GamepadHandler gamepadHandler = new GamepadHandler(this);
     private Callback<String> requestCallback;
+    private NetDriveServer netDriveServer;
 
     public WinHandler(XServerDisplayActivity activity) {
         this.activity = activity;
@@ -360,6 +361,11 @@ public class WinHandler {
             actions.notify();
         }
 
+        if (netDriveServer != null) {
+            netDriveServer.stop();
+            netDriveServer = null;
+        }
+
         if (midiHandler != null) {
             midiHandler.close();
             midiHandler.destroy();
@@ -485,6 +491,20 @@ public class WinHandler {
                     if (onPreExecListener != null) shouldExit = onPreExecListener.onPreExec(path);
                 }
                 sendPacket(port, new byte[]{(byte)(shouldExit ? 1 : 0)});
+                break;
+            }
+            case RequestCodes.NET_DRIVE_START: {
+                /* reply "127.0.0.1:<port> <user> <password>" of the rclone server, empty on failure */
+                if (netDriveServer == null) netDriveServer = new NetDriveServer(activity);
+                final NetDriveServer server = netDriveServer;
+                Executors.newSingleThreadExecutor().execute(() -> {
+                    byte[] reply = server.start().getBytes(StandardCharsets.UTF_8);
+                    addAction(() -> sendPacket(port, reply.length > 0 ? reply : new byte[]{0}));
+                });
+                break;
+            }
+            case RequestCodes.NET_DRIVE_STOP: {
+                if (netDriveServer != null) netDriveServer.stop();
                 break;
             }
         }

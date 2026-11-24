@@ -24,4 +24,6 @@ abstract class RequestCodes {
     public static final byte SHOW_WINDOW = 20;
     public static final byte GET_EXECUTABLE_PATH = 21;
     public static final byte PRE_EXEC = 22;
+    public static final byte NET_DRIVE_START = 23;
+    public static final byte NET_DRIVE_STOP = 24;
 }
