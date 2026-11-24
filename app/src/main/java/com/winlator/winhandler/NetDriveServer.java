@@ -3,23 +3,23 @@ package com.winlator.winhandler;
 import android.content.Context;
 import android.util.Log;
 
+import com.winlator.core.TarCompressorUtils;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.SecureRandom;
-import java.util.zip.GZIPInputStream;
 
 /* Runs the bundled rclone as a local remote control server ("rclone rcd") for the
  * network drives of the file manager (WFM). WFM asks for it through WinHandler and
  * then talks to it over HTTP on 127.0.0.1; it browses and copies files on SMB shares. */
 class NetDriveServer {
     private static final String TAG = "NetDriveServer";
-    private static final String ASSET_NAME = "netdrive/rclone.gz";
+    private static final String ASSET_NAME = "rclone.tzst";
     /* bump with a new rclone so the binary is unpacked again */
     private static final String VERSION = "1.76.0";
     private final Context context;
@@ -48,17 +48,11 @@ class NetDriveServer {
         }
 
         if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("cannot create " + dir);
-        File tmpFile = new File(dir, "rclone.tmp");
-        try (InputStream in = new GZIPInputStream(context.getAssets().open(ASSET_NAME));
-             OutputStream out = new FileOutputStream(tmpFile)) {
-            byte[] buffer = new byte[65536];
-            int length;
-            while ((length = in.read(buffer)) > 0) out.write(buffer, 0, length);
-        }
-        if (!tmpFile.setExecutable(true, true) || !tmpFile.renameTo(binary)) {
-            tmpFile.delete();
-            throw new IOException("cannot install " + binary);
-        }
+        versionFile.delete();
+        binary.delete();
+        if (!TarCompressorUtils.extract(TarCompressorUtils.Type.ZSTD, context, ASSET_NAME, dir) || !binary.isFile())
+            throw new IOException("cannot unpack " + ASSET_NAME);
+        if (!binary.setExecutable(true, true)) throw new IOException("cannot make " + binary + " executable");
         try (OutputStream out = new FileOutputStream(versionFile)) {
             out.write(VERSION.getBytes());
         }
