@@ -59,7 +59,7 @@ public class DXVKConfigDialog extends ContentDialog {
             newConfig.put("maxDeviceMemory", StringUtils.parseMemorySize(sMaxDeviceMemory.getSelectedItem()));
 
             String ddrawWrapper = StringUtils.parseIdentifier(sDDrawWrapper.getSelectedItem());
-            /* always stored: with DXVK a missing value means CNC DDraw */
+            /* always stored, so the choice survives a change of the default */
             newConfig.put("ddrawWrapper", ddrawWrapper);
 
             GPUCardAdapter.GPUCard gpuCard = (GPUCardAdapter.GPUCard)sCustomDevice.getSelectedItem();

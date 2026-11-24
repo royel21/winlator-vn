@@ -21,7 +21,7 @@ public abstract class DefaultVersion {
     public static final String CNC_DDRAW = "6.6";
     public static final String SOUNDFONT = "SONiVOX-EAS-GM-Wavetable";
     public static final String MINOR_DXVK = "1.12.0-sarek";
-    public static final String MAJOR_DXVK = "2.4.1";
+    public static final String MAJOR_DXVK = "2.7.1";
 
     public static String DXVK() {
         return DXVK(null);

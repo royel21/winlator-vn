@@ -20,9 +20,9 @@ public abstract class DXWrappers {
         }
     }
 
-    /* DirectDraw wrapper used when the DX wrapper config does not name one: CNC DDraw with DXVK */
+    /* DirectDraw wrapper used when the DX wrapper config does not name one */
     public static String getDefaultDDrawWrapper(String dxwrapper) {
-        return DXVK.equals(dxwrapper) ? CNC_DDRAW : WINED3D;
+        return WINED3D;
     }
 
     public static String parseIdentifier(String dxwrapper) {
