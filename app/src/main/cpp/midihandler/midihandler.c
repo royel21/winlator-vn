@@ -95,6 +95,12 @@ static void MIDIHandler_pitchBend(MIDIHandler* midiHandler, int channel, int val
     fluid_synth_pitch_bend(midiHandler->synth, channel, value);
 }
 
+/* back to the power-on state of a General MIDI synth: default programs, volumes and controllers */
+static void MIDIHandler_systemReset(MIDIHandler* midiHandler) {
+    if (!midiHandler) return;
+    fluid_synth_system_reset(midiHandler->synth);
+}
+
 static void MIDIHandler_loadSoundFont(MIDIHandler* midiHandler, const char* path) {
     if (!midiHandler) return;
     if (midiHandler->soundfontId != -1) fluid_synth_sfunload(midiHandler->synth, midiHandler->soundfontId, 1);
@@ -163,4 +169,9 @@ JNIEXPORT void JNICALL
 Java_com_winlator_winhandler_MIDIHandler_keyPressure(JNIEnv *env, jobject obj, jlong nativePtr,
                                                      jint channel, jint key, jint value) {
     MIDIHandler_keyPressure((MIDIHandler*)nativePtr, channel, key, value);
+}
+
+JNIEXPORT void JNICALL
+Java_com_winlator_winhandler_MIDIHandler_systemReset(JNIEnv *env, jobject obj, jlong nativePtr) {
+    MIDIHandler_systemReset((MIDIHandler*)nativePtr);
 }
